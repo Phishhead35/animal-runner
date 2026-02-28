@@ -1,0 +1,1569 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
+  <title>Cartoon Animal Runner</title>
+  <style>
+    html, body { margin:0; height:100%; background:#bfe9ff; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; }
+    .wrap { height:100%; display:flex; align-items:center; justify-content:center; padding:14px; box-sizing:border-box; }
+    canvas { width:min(960px,100%); height:auto; aspect-ratio:960/540; border:2px solid #232323; border-radius:18px; background:transparent; touch-action:none; }
+    .hud {
+      position:fixed; top:12px; left:12px; right:12px;
+      display:flex; gap:10px; align-items:center; justify-content:space-between;
+      color:#232323; font-size:14px; pointer-events:none;
+    }
+    .hud .left, .hud .right { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .pill { background:rgba(255,255,255,0.75); border:1px solid rgba(35,35,35,0.25); border-radius:999px; padding:6px 10px; }
+    .controls {
+      position:fixed; left:12px; right:12px; bottom:12px;
+      display:flex; gap:10px; justify-content:space-between; align-items:flex-end;
+    }
+    .cluster { display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; }
+    button {
+      appearance:none; border:2px solid #232323; background:rgba(255,255,255,0.85);
+      border-radius:16px; padding:12px 14px; font-size:14px; font-weight:700;
+      box-shadow:0 8px 0 rgba(35,35,35,0.12); cursor:pointer;
+    }
+    button:active { transform:translateY(2px); box-shadow:0 6px 0 rgba(35,35,35,0.12); }
+    .btn-wide { padding:14px 18px; font-size:16px; }
+    .btn-red    { background:rgba(255,220,220,0.9); }
+    .btn-blue   { background:rgba(215,235,255,0.9); }
+    .btn-purple { background:rgba(235,220,255,0.9); }
+    .btn-green  { background:rgba(220,255,230,0.9); }
+    .btn-dark   { background:rgba(35,35,35,0.88); color:white; }
+    .small { font-size:12px; font-weight:600; opacity:0.9; }
+  </style>
+</head>
+<body>
+  <div class="hud">
+    <div class="left">
+      <div class="pill" id="hudScore">Score: 0</div>
+      <div class="pill" id="hudCoins">Coins: 0</div>
+      <div class="pill" id="hudWallet">Wallet: 0</div>
+      <div class="pill" id="hudPowers">Powers: none</div>
+    </div>
+    <div class="right">
+      <div class="pill" id="hudChar">Frog</div>
+      <div class="pill" id="hudAssist">Assist: ON</div>
+      <div class="pill" id="hudAudio">Audio: Muted</div>
+      <div class="pill small">Hold Space/↑=jump • Hold ↓/S=duck • R restart • M audio • A assist • 1/2/3 powers</div>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <canvas id="c" width="960" height="540"></canvas>
+  </div>
+
+  <div class="controls">
+    <div class="cluster">
+      <button class="btn-wide btn-dark" id="btnJump">JUMP</button>
+      <button class="btn-wide btn-dark" id="btnDuck">DUCK ↓</button>
+      <button class="btn-green" id="btnShop">SHOP (S)</button>
+      <button class="btn-green" id="btnAssist">ASSIST: ON (A)</button>
+      <button class="btn-dark"  id="btnAudio">AUDIO (M)</button>
+    </div>
+    <div class="cluster">
+      <button class="btn-blue"   id="btnShield">Shield (1)<div class="small">10 coins</div></button>
+      <button class="btn-red"    id="btnMagnet">Magnet (2)<div class="small">12 coins</div></button>
+      <button class="btn-purple" id="btnDouble">Double (3)<div class="small">12 coins</div></button>
+    </div>
+  </div>
+
+<script>
+(() => {
+  // ── Canvas / DOM ──────────────────────────────────────────────────────────────
+  const canvas  = document.getElementById("c");
+  const ctx     = canvas.getContext("2d");
+  const W = canvas.width, H = canvas.height;
+
+  const hudScore  = document.getElementById("hudScore");
+  const hudCoins  = document.getElementById("hudCoins");
+  const hudWallet = document.getElementById("hudWallet");
+  const hudPowers = document.getElementById("hudPowers");
+  const hudChar   = document.getElementById("hudChar");
+  const hudAssist = document.getElementById("hudAssist");
+  const hudAudio  = document.getElementById("hudAudio");
+  const btnAssist = document.getElementById("btnAssist");
+  const btnAudio  = document.getElementById("btnAudio");
+
+  // ── Constants ─────────────────────────────────────────────────────────────────
+  const GROUND_Y       = 420;
+  const INK            = "#232323";
+  const GROUND_COL     = "#73d678";
+  const GROUND_DARK    = "#50b95a";
+  const SKY1           = [170,225,255];
+  const SKY2           = [150,210,255];
+
+  const EASY_END       = 30.0;
+  const MEDIUM_END     = 90.0;
+  const SPEED_EASY     = 330.0;
+  const SPEED_MEDIUM   = 460.0;
+  const GAP_FACTOR     = 0.85;
+  const GAP_MIN_BASE   = 260;
+  const GAP_MAX_BASE   = 460;
+  const GAP_TAIL_EXTRA = 140;
+  const COIN_CHANCE    = 0.55;
+  const BIRD_RATES     = [0.15, 0.30, 0.40];
+  const ORB_RATES      = [0.10, 0.16, 0.20];
+  const COYOTE_TIME    = 0.10;
+
+  const ASSIST_ON      = true;
+  const GRAVITY_NORM   = 2400; const JUMP_V_NORM  = 980;
+  const GRAVITY_ASS    = 2150; const JUMP_V_ASS   = 1040;
+  const SPEED_CAP_NORM = 540.0; const SPEED_CAP_ASS = 500.0;
+  const ASSIST_SHIELD_TIME = 45.0;
+
+  const CHARGE_TIME         = 0.30;
+  const JUMP_MIN_RATIO      = 0.55;  // raised: short tap now clears even the tallest snake
+  const JUMP_MAX_RATIO      = 1.00;
+  const JUMP_HOLD_GRAV_MULT = 0.48;
+
+  const DUCK_H_RATIO    = 0.45;
+  const BIRD_FLY_Y      = 290;
+  const BIRD_GAP_BOTTOM = 410;
+  const COIN_POP_DUR    = 0.25;
+
+  const POWER_COST = { shield:10, magnet:12, double:12 };
+  const POWER_DUR  = { shield:5.0, magnet:7.0, double:7.0 };
+
+  // ── Characters & Skins ────────────────────────────────────────────────────────
+  const CHARACTERS = {
+    frog:     { label:"Frog 🐸",      emoji:"🐸", cost:0,
+                skins:{ green:  { label:"Green (default)", cost:0,  body:"#50d26e", belly:"#d2ffd9" },
+                        blue:   { label:"Blue",            cost:20, body:"#5faaff", belly:"#d0eaff" },
+                        pink:   { label:"Pink",            cost:20, body:"#ff78aa", belly:"#ffd0e8" },
+                        gold:   { label:"Gold",            cost:35, body:"#ffbe46", belly:"#fff0c0" } } },
+    dog:      { label:"Dog 🐶",       emoji:"🐶", cost:30,
+                skins:{ tan:    { label:"Tan (default)",   cost:0,  body:"#d4915a", belly:"#f5dcc0" },
+                        grey:   { label:"Grey",            cost:20, body:"#9aabb5", belly:"#dce6ea" },
+                        brown:  { label:"Brown",           cost:20, body:"#8b5e3c", belly:"#d4aa80" },
+                        dalmatian:{ label:"Dalmatian",     cost:35, body:"#f0f0f0", belly:"#ffffff" } } },
+    cat:      { label:"Cat 🐱",       emoji:"🐱", cost:30,
+                skins:{ orange: { label:"Orange (default)",cost:0,  body:"#f0834a", belly:"#fde0c8" },
+                        grey:   { label:"Grey",            cost:20, body:"#8e8e9e", belly:"#d8d8e8" },
+                        black:  { label:"Black",           cost:20, body:"#2e2e3e", belly:"#5a5a6e" },
+                        white:  { label:"White",           cost:35, body:"#f5f5f5", belly:"#e8e8e8" } } },
+    monkey:   { label:"Monkey 🐒",    emoji:"🐒", cost:30,
+                skins:{ brown:  { label:"Brown (default)", cost:0,  body:"#8b5e3c", belly:"#d4aa80" },
+                        tan:    { label:"Tan",             cost:20, body:"#c8884a", belly:"#f0d0a0" },
+                        grey:   { label:"Grey",            cost:20, body:"#7a7a8a", belly:"#c0c0d0" },
+                        dark:   { label:"Dark",            cost:35, body:"#4a3020", belly:"#7a5a3a" } } },
+    capybara: { label:"Capybara 🐾",  emoji:"🐾", cost:50,
+                skins:{ brown:  { label:"Brown (default)", cost:0,  body:"#b5854a", belly:"#e8c888" },
+                        sandy:  { label:"Sandy",           cost:25, body:"#d4aa6a", belly:"#f5e0b0" },
+                        dark:   { label:"Dark",            cost:25, body:"#7a5530", belly:"#c09060" },
+                        cinnamon:{ label:"Cinnamon",       cost:40, body:"#c0603a", belly:"#f0b090" } } },
+    hippo:    { label:"Hippo 🦛",     emoji:"🦛", cost:60,
+                skins:{ grey:   { label:"Grey (default)",  cost:0,  body:"#8899aa", belly:"#e8d0c8" },
+                        purple: { label:"Purple",          cost:25, body:"#9977bb", belly:"#ddc8ee" },
+                        blue:   { label:"Blue",            cost:25, body:"#5588bb", belly:"#c0d8f0" },
+                        pink:   { label:"Pink",            cost:40, body:"#cc7799", belly:"#f0c8d8" } } },
+    elephant: { label:"Elephant 🐘",  emoji:"🐘", cost:70,
+                skins:{ grey:   { label:"Grey (default)",  cost:0,  body:"#8888aa", belly:"#ccccdd" },
+                        brown:  { label:"Brown",           cost:25, body:"#997755", belly:"#ddbb99" },
+                        pink:   { label:"Pink",            cost:25, body:"#dd99aa", belly:"#f5dde5" },
+                        ivory:  { label:"Ivory",           cost:40, body:"#ddd5bb", belly:"#f5f0e0" } } },
+    puffin:   { label:"Puffin 🐦",    emoji:"🐦", cost:80,
+                skins:{ classic:{ label:"Classic (default)",cost:0, body:"#111111", belly:"#ffffff" },
+                        blue:   { label:"Blue",            cost:25, body:"#334488", belly:"#aabbdd" },
+                        brown:  { label:"Brown",           cost:25, body:"#553322", belly:"#ddbbaa" },
+                        rainbow:{ label:"Rainbow Beak",    cost:40, body:"#111111", belly:"#ffffff" } } },
+    axolotl:  { label:"Axolotl 🫧",   emoji:"🫧", cost:90,
+                skins:{ pink:     { label:"Pink (default)", cost:0,  body:"#f0a0b8", belly:"#ffd8e8" },
+                        leucistic:{ label:"Leucistic",      cost:25, body:"#f8eedd", belly:"#ffffff" },
+                        golden:   { label:"Golden",         cost:25, body:"#f0c840", belly:"#fff0a0" },
+                        wild:     { label:"Wild Type",      cost:40, body:"#556644", belly:"#aabb88" } } },
+  };
+  const CHAR_KEYS = Object.keys(CHARACTERS);
+
+  // ── Persistence ───────────────────────────────────────────────────────────────
+  const SAVE_KEY = "cartoon_animal_runner_v1";
+  function loadSave() {
+    try {
+      const s = JSON.parse(localStorage.getItem(SAVE_KEY));
+      s.wallet       ??= 0;
+      s.best         ??= 0;
+      s.character    ??= "frog";
+      s.charSkin     ??= {};
+      s.ownedChars   ??= ["frog"];
+      s.ownedSkins   ??= {};
+      s.assist       ??= ASSIST_ON;
+      if (!CHARACTERS[s.character]) s.character = "frog";
+      if (!s.ownedChars.includes("frog")) s.ownedChars.push("frog");
+      for (const ck of CHAR_KEYS) {
+        s.ownedSkins[ck] ??= [Object.keys(CHARACTERS[ck].skins)[0]];
+      }
+      return s;
+    } catch {
+      return { wallet:0, best:0, character:"frog", charSkin:{},
+               ownedChars:["frog"],
+               ownedSkins:{ frog:["green"], dog:["tan"], cat:["orange"], monkey:["brown"] },
+               assist:ASSIST_ON };
+    }
+  }
+  function persist() { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); }
+  let save = loadSave();
+
+  function activeSkinKey(ck) {
+    const k = save.charSkin[ck];
+    return (k && CHARACTERS[ck].skins[k]) ? k : Object.keys(CHARACTERS[ck].skins)[0];
+  }
+  function activeSkin(ck) { return CHARACTERS[ck].skins[activeSkinKey(ck)]; }
+
+  // ── Audio & Music Engine ──────────────────────────────────────────────────────
+  let audioCtx = null, muted = true;
+  let musicGain = null;   // master gain node for all music
+  let musicNodes = [];    // active oscillator/gain nodes to stop on track change
+  let musicTrack = null;  // "start" | "play" | null
+
+  function ensureAudio() {
+    if (audioCtx) return;
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    // Master music bus — quieter than SFX
+    musicGain = audioCtx.createGain();
+    musicGain.gain.value = muted ? 0 : 0.18;
+    musicGain.connect(audioCtx.destination);
+  }
+
+  function beep(freq=440, dur=0.06, gain=0.05) {
+    if (muted || !audioCtx) return;
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type="square"; o.frequency.value=freq; g.gain.value=gain;
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start(); o.stop(audioCtx.currentTime+dur);
+  }
+
+  // ── Note helpers ──────────────────────────────────────────────────────────────
+  // Equal-tempered frequency from MIDI note number (A4 = 69 = 440 Hz)
+  const midiHz = n => 440 * Math.pow(2, (n - 69) / 12);
+
+  // Schedule a single note on a pre-connected oscillator+gain
+  function schedNote(type, freq, startT, dur, peakGain, bus) {
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = type;
+    o.frequency.value = freq;
+    g.gain.setValueAtTime(0, startT);
+    g.gain.linearRampToValueAtTime(peakGain, startT + 0.01);
+    g.gain.setValueAtTime(peakGain, startT + dur * 0.7);
+    g.gain.linearRampToValueAtTime(0, startT + dur);
+    o.connect(g); g.connect(bus);
+    o.start(startT); o.stop(startT + dur + 0.02);
+    musicNodes.push(o, g);
+  }
+
+  // Stop all running music nodes immediately
+  function stopMusic() {
+    for (const n of musicNodes) {
+      try { if (n.stop) n.stop(); } catch(_) {}
+      try { n.disconnect(); } catch(_) {}
+    }
+    musicNodes = [];
+    musicTrack = null;
+  }
+
+  // ── Tracks ────────────────────────────────────────────────────────────────────
+  // Notes are MIDI numbers. Each track is a looping sequence of { note, dur, rest? }
+  // Sequences are pre-calculated and then looped via recursive scheduling.
+
+  // Upbeat run track — C major pentatonic bounce
+  // Melody: bouncy 8th-note riff
+  const RUN_MELODY = [
+    // bar 1
+    72,72,74,76, 79,76,74,72,
+    // bar 2
+    74,74,76,79, 81,79,76,74,
+    // bar 3
+    76,79,81,83, 84,83,81,79,
+    // bar 4 — descend back
+    79,76,74,72, 71,72,74,72,
+  ].map(n=>({ n, dur:0.125 }));
+
+  // Bass line — root + fifth pump
+  const RUN_BASS = [
+    60,60,67,60, 60,60,67,60,
+    62,62,69,62, 62,62,69,62,
+    64,64,71,64, 64,64,71,64,
+    62,62,69,62, 60,60,67,60,
+  ].map((n,i)=>({ n, dur:0.125 }));
+
+  // Calm title screen — slower arpeggios in Am
+  const TITLE_MELODY = [
+    69,72,76,81, 79,76,72,69,
+    67,71,74,79, 77,74,71,67,
+    65,69,72,77, 76,72,69,65,
+    67,71,74,79, 81,79,76,72,
+  ].map(n=>({ n, dur:0.22 }));
+
+  const TITLE_BASS = [
+    57,57,64,57, 57,57,64,57,
+    55,55,62,55, 55,55,62,55,
+    53,53,60,53, 53,53,60,53,
+    55,55,62,55, 57,57,64,57,
+  ].map(n=>({ n, dur:0.22 }));
+
+  // Schedule a full looping sequence starting at `startT`
+  // Returns total bar duration so caller can reschedule
+  function schedSequence(notes, type, gainPeak, bus, startT) {
+    let t = startT;
+    for (const note of notes) {
+      schedNote(type, midiHz(note.n), t, note.dur * 0.85, gainPeak, bus);
+      t += note.dur;
+    }
+    return t - startT; // total duration of one loop
+  }
+
+  // Self-scheduling looper — calls itself recursively ~1 bar before loop ends
+  function startLooper(melNotes, bassNotes, lookahead=0.1) {
+    if (!audioCtx || muted) return;
+    const melBus  = audioCtx.createGain(); melBus.gain.value  = 1.0; melBus.connect(musicGain);
+    const bassBus = audioCtx.createGain(); bassBus.gain.value = 0.55; bassBus.connect(musicGain);
+    musicNodes.push(melBus, bassBus);
+
+    function loop(startT) {
+      const melDur  = schedSequence(melNotes,  "square",   0.22, melBus,  startT);
+      const bassDur = schedSequence(bassNotes, "triangle", 0.30, bassBus, startT);
+      const barDur  = Math.max(melDur, bassDur);
+      // Schedule next loop slightly before this one ends
+      const schedDelay = (startT + barDur - lookahead - audioCtx.currentTime) * 1000;
+      setTimeout(() => {
+        if (!muted && musicNodes.includes(melBus)) loop(startT + barDur);
+      }, Math.max(0, schedDelay));
+    }
+    loop(audioCtx.currentTime + 0.05);
+  }
+
+  function playMusic(track) {
+    if (musicTrack === track) return; // already playing this track
+    stopMusic();
+    if (!audioCtx || muted) return;
+    musicTrack = track;
+    if (track === "play")  startLooper(RUN_MELODY,   RUN_BASS);
+    if (track === "start") startLooper(TITLE_MELODY, TITLE_BASS);
+  }
+
+  function setMuted(v) {
+    muted = v;
+    if (!muted) {
+      ensureAudio();
+      audioCtx.resume().then(() => {
+        if (musicGain) musicGain.gain.value = 0.18;
+        // Restart music for current game state
+        const track = (state === "play") ? "play" : "start";
+        playMusic(track);
+        beep(330, 0.05, 0.05);
+        beep(440, 0.05, 0.05);
+      });
+    } else {
+      if (musicGain) musicGain.gain.value = 0;
+      stopMusic();
+    }
+    hudAudio.textContent = `Audio: ${muted ? "Muted" : "On"}`;
+  }
+
+  // ── Assist ────────────────────────────────────────────────────────────────────
+  let assist = !!save.assist, assistShieldGiven = false;
+  function setAssist(v) { assist=!!v; save.assist=assist; persist(); refreshAssistUI(); }
+  function refreshAssistUI() {
+    btnAssist.textContent = `ASSIST: ${assist?"ON":"OFF"} (A)`;
+    hudAssist.textContent = `Assist: ${assist?"ON":"OFF"}`;
+  }
+  refreshAssistUI();
+
+  // ── Game state ────────────────────────────────────────────────────────────────
+  let state = "start";
+  let runTime=0, dist=0, score=0, coinsRun=0, speed=SPEED_EASY, nextSpawn=W+200;
+  let obstacles=[], coinList=[], orbList=[];
+
+  const player = {
+    x:160, y:0, w:56, h:72,
+    vy:0, on:true, tt:0,
+    shieldT:0, magnetT:0, doubleT:0, doubleUsed:false,
+    coyoteT:0, chargeT:0, charging:false, jumpHeld:false, ducking:false,
+  };
+
+  const clouds = Array.from({length:7}, () => randomCloud(true));
+  function randomCloud(init=false) {
+    return { x:init?Math.random()*W:W+40+Math.random()*160,
+             y:40+Math.random()*170, s:0.8+Math.random()*0.9, v:18+Math.random()*20 };
+  }
+
+  // Shop state — two tabs: characters and skins
+  let shopTab = "chars";
+  let shopCharIdx = CHAR_KEYS.indexOf(save.character);
+  let shopSkinIdx = 0;
+  let shopCharScrollOffset = 0;
+  function currentShopChar()  { return CHAR_KEYS[shopCharIdx]; }
+  function currentShopSkins() { return Object.keys(CHARACTERS[currentShopChar()].skins); }
+
+  function resetRun() {
+    runTime=0; dist=0; score=0; coinsRun=0; speed=SPEED_EASY; nextSpawn=W+200;
+    obstacles=[]; coinList=[]; orbList=[];
+    player.y=GROUND_Y-player.h; player.vy=0; player.on=true; player.tt=0;
+    player.shieldT=0; player.magnetT=0; player.doubleT=0;
+    player.doubleUsed=false; player.coyoteT=0;
+    player.chargeT=0; player.charging=false; player.jumpHeld=false; player.ducking=false;
+    assistShieldGiven=false;
+    playMusic("play"); // switch to run track
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────────
+  const clamp = (v,a,b) => Math.max(a,Math.min(b,v));
+  const rint  = (a,b)   => Math.floor(a+Math.random()*(b-a+1));
+  const rects = (a,b)   => a.x<b.x+b.w && a.x+a.w>b.x && a.y<b.y+b.h && a.y+a.h>b.y;
+
+  function speedForTime(rt) {
+    const cap = assist?SPEED_CAP_ASS:SPEED_CAP_NORM;
+    if (rt<EASY_END)   return SPEED_EASY;
+    if (rt<MEDIUM_END) return SPEED_EASY+(rt-EASY_END)*((SPEED_MEDIUM-SPEED_EASY)/(MEDIUM_END-EASY_END));
+    return Math.min(cap, SPEED_MEDIUM+(rt-MEDIUM_END)*1.0);
+  }
+  function rateIndex(rt) { return rt<EASY_END?0:rt<MEDIUM_END?1:2; }
+  function gapRange(s) {
+    const bonus = Math.floor(Math.max(0,(s-SPEED_EASY)*GAP_FACTOR));
+    return { min:GAP_MIN_BASE+bonus, max:GAP_MAX_BASE+bonus };
+  }
+
+  // ── Spawning ──────────────────────────────────────────────────────────────────
+  function spawnPack() {
+    const ri=rateIndex(runTime), kind=Math.random()<BIRD_RATES[ri]?"bird":"snake";
+    let x=nextSpawn, y, w, h;
+    if (kind==="snake") { w=rint(52,80); h=rint(36,52); y=GROUND_Y-h; }
+    else                { w=rint(60,88); h=rint(36,52); y=BIRD_FLY_Y; }
+    obstacles.push({x,y,w,h,kind,phase:Math.random()*Math.PI*2});
+
+    if (Math.random()<COIN_CHANCE) {
+      const cy = kind==="snake"
+        ? clamp(y-rint(30,80),100,GROUND_Y-40)
+        : clamp(BIRD_GAP_BOTTOM-rint(20,50),200,GROUND_Y-40);
+      coinList.push({x:x+w/2+rint(-20,20), y:cy, r:12, got:false, popT:0});
+    }
+    if (Math.random()<ORB_RATES[ri]) {
+      const orbKind=["shield","magnet","double"][rint(0,2)];
+      orbList.push({x:x+w/2, y:clamp(y-rint(60,120),100,GROUND_Y-70), r:14, kind:orbKind, got:false});
+    }
+    const gr=gapRange(speed);
+    nextSpawn = x+rint(gr.min,gr.max)+rint(0,GAP_TAIL_EXTRA);
+  }
+
+  // ── Jump / Duck ───────────────────────────────────────────────────────────────
+  function jumpPressed() {
+    if (state!=="play") return;
+    player.jumpHeld=true;
+    if (player.on||player.coyoteT>0) { player.charging=true; player.chargeT=0; }
+    else if (player.doubleT>0&&!player.doubleUsed) {
+      player.doubleUsed=true;
+      player.vy=-Math.floor((assist?JUMP_V_ASS:JUMP_V_NORM)*0.92);
+      beep(620,0.05,0.05);
+    }
+  }
+  function jumpReleased() {
+    player.jumpHeld=false;
+    if (player.charging) {
+      player.charging=false;
+      const jumpV=assist?JUMP_V_ASS:JUMP_V_NORM;
+      const ratio=clamp(player.chargeT/CHARGE_TIME,0,1);
+      player.vy=-Math.floor(jumpV*(JUMP_MIN_RATIO+(JUMP_MAX_RATIO-JUMP_MIN_RATIO)*ratio));
+      player.on=false; player.coyoteT=0; player.chargeT=0;
+      beep(380+ratio*260,0.06,0.05);
+    }
+  }
+
+  // ── Power & shop purchases ────────────────────────────────────────────────────
+  function buyPower(kind) {
+    if (state!=="play") return;
+    if (save.wallet<POWER_COST[kind]) { beep(180,0.08,0.06); return; }
+    save.wallet-=POWER_COST[kind]; persist();
+    if (kind==="shield") player.shieldT=POWER_DUR.shield;
+    if (kind==="magnet") player.magnetT=POWER_DUR.magnet;
+    if (kind==="double") player.doubleT=POWER_DUR.double;
+    beep(880,0.05,0.05); beep(1040,0.05,0.05);
+  }
+
+  function buyOrEquipChar(ck) {
+    const ch=CHARACTERS[ck]; if (!ch) return;
+    if (save.ownedChars.includes(ck)) {
+      save.character=ck; shopCharIdx=CHAR_KEYS.indexOf(ck); shopSkinIdx=0; persist(); beep(440,0.05,0.04);
+    } else if (save.wallet>=ch.cost) {
+      save.wallet-=ch.cost; save.ownedChars.push(ck); save.character=ck;
+      shopCharIdx=CHAR_KEYS.indexOf(ck); shopSkinIdx=0; persist();
+      beep(660,0.05,0.05); beep(880,0.05,0.05);
+    } else { beep(180,0.08,0.06); }
+  }
+
+  function buyOrEquipSkin(ck, sk) {
+    const skins=CHARACTERS[ck]?.skins; if (!skins||!skins[sk]) return;
+    save.ownedSkins[ck]??=[];
+    if (save.ownedSkins[ck].includes(sk)) {
+      save.charSkin[ck]=sk; persist(); beep(440,0.05,0.04);
+    } else if (save.wallet>=skins[sk].cost) {
+      save.wallet-=skins[sk].cost; save.ownedSkins[ck].push(sk);
+      save.charSkin[ck]=sk; persist();
+      beep(660,0.05,0.05); beep(880,0.05,0.05);
+    } else { beep(180,0.08,0.06); }
+  }
+
+  // ── Input ─────────────────────────────────────────────────────────────────────
+  window.addEventListener("keydown", e => {
+    ensureAudio();
+    const code=e.code;
+    if (code==="Space"||code==="ArrowUp") {
+      if (state==="start"||state==="over") { state="play"; resetRun(); }
+      if (!e.repeat) jumpPressed();
+      e.preventDefault();
+    }
+    if (code==="KeyR"&&state!=="play") { state="play"; resetRun(); }
+    if (code==="KeyM") setMuted(!muted);
+    if (code==="KeyS"&&state!=="play") { state=(state==="shop")?"start":"shop"; if (state==="start"||state==="shop") playMusic("start"); }
+    if (code==="KeyS"&&state==="play") { player.ducking=true; e.preventDefault(); }
+    if (code==="ArrowDown"&&state==="play") { player.ducking=true; e.preventDefault(); }
+    if (code==="KeyA") setAssist(!assist);
+    if (code==="Digit1") buyPower("shield");
+    if (code==="Digit2") buyPower("magnet");
+    if (code==="Digit3") buyPower("double");
+
+    if (state==="shop") {
+      const VISIBLE_ROWS=5;
+      const skinKeys=currentShopSkins();
+      if (code==="Tab") { shopTab=shopTab==="chars"?"skins":"chars"; shopSkinIdx=0; e.preventDefault(); }
+      if (shopTab==="chars") {
+        if (code==="ArrowDown"||code==="ArrowUp") {
+          if (code==="ArrowDown") shopCharIdx=(shopCharIdx+1)%CHAR_KEYS.length;
+          else shopCharIdx=(shopCharIdx-1+CHAR_KEYS.length)%CHAR_KEYS.length;
+          // Keep selection in view
+          if (shopCharIdx < shopCharScrollOffset) shopCharScrollOffset=shopCharIdx;
+          if (shopCharIdx >= shopCharScrollOffset+VISIBLE_ROWS) shopCharScrollOffset=shopCharIdx-VISIBLE_ROWS+1;
+          e.preventDefault();
+        }
+        if (code==="Enter") buyOrEquipChar(CHAR_KEYS[shopCharIdx]);
+      } else {
+        if (code==="ArrowDown") { shopSkinIdx=(shopSkinIdx+1)%skinKeys.length; e.preventDefault(); }
+        if (code==="ArrowUp")   { shopSkinIdx=(shopSkinIdx-1+skinKeys.length)%skinKeys.length; e.preventDefault(); }
+        if (code==="Enter") buyOrEquipSkin(currentShopChar(), skinKeys[shopSkinIdx]);
+      }
+      if (code==="Escape") state="start";
+    }
+  });
+
+  window.addEventListener("keyup", e => {
+    if (e.code==="Space"||e.code==="ArrowUp") jumpReleased();
+    if (e.code==="ArrowDown"||e.code==="KeyS") player.ducking=false;
+  });
+
+  const activePointers=new Set();
+  function onPointerDown(e) {
+    ensureAudio();
+    if (state==="shop") return;
+    if (state==="start"||state==="over") { state="play"; resetRun(); }
+    if (!activePointers.has(e.pointerId)) { activePointers.add(e.pointerId); jumpPressed(); }
+    e.preventDefault?.();
+  }
+  function onPointerUp(e) { if (activePointers.delete(e.pointerId)) jumpReleased(); }
+  canvas.addEventListener("pointerdown",  onPointerDown);
+  canvas.addEventListener("pointerup",    onPointerUp);
+  canvas.addEventListener("pointercancel",onPointerUp);
+
+  document.getElementById("btnJump").addEventListener("pointerdown", e => {
+    ensureAudio();
+    if (state==="start"||state==="over") { state="play"; resetRun(); }
+    if (!activePointers.has("btn")) { activePointers.add("btn"); jumpPressed(); }
+    e.preventDefault();
+  });
+  document.getElementById("btnJump").addEventListener("pointerup",     ()=>{ activePointers.delete("btn"); jumpReleased(); });
+  document.getElementById("btnJump").addEventListener("pointercancel", ()=>{ activePointers.delete("btn"); jumpReleased(); });
+
+  const btnDuck=document.getElementById("btnDuck");
+  btnDuck.addEventListener("pointerdown",  e=>{ player.ducking=true; e.preventDefault(); });
+  btnDuck.addEventListener("pointerup",    ()=>{ player.ducking=false; });
+  btnDuck.addEventListener("pointercancel",()=>{ player.ducking=false; });
+  btnDuck.addEventListener("mouseleave",   ()=>{ player.ducking=false; });
+
+  document.getElementById("btnShop").addEventListener("click", ()=>{ state=(state==="shop"?"start":"shop"); playMusic("start"); });
+  btnAssist.addEventListener("click", ()=>setAssist(!assist));
+  btnAudio.addEventListener("click",  ()=>setMuted(!muted));
+  document.getElementById("btnShield").addEventListener("click", ()=>buyPower("shield"));
+  document.getElementById("btnMagnet").addEventListener("click", ()=>buyPower("magnet"));
+  document.getElementById("btnDouble").addEventListener("click", ()=>buyPower("double"));
+
+  // ── Shop scroll: mouse wheel ─────────────────────────────────────────────────
+  canvas.addEventListener("wheel", e => {
+    if (state!=="shop") return;
+    e.preventDefault();
+    const VISIBLE_ROWS=5;
+    if (shopTab==="chars") {
+      if (e.deltaY>0) shopCharIdx=Math.min(shopCharIdx+1,CHAR_KEYS.length-1);
+      else            shopCharIdx=Math.max(shopCharIdx-1,0);
+      if (shopCharIdx < shopCharScrollOffset) shopCharScrollOffset=shopCharIdx;
+      if (shopCharIdx >= shopCharScrollOffset+VISIBLE_ROWS) shopCharScrollOffset=shopCharIdx-VISIBLE_ROWS+1;
+    } else {
+      const sk=currentShopSkins();
+      if (e.deltaY>0) shopSkinIdx=Math.min(shopSkinIdx+1,sk.length-1);
+      else            shopSkinIdx=Math.max(shopSkinIdx-1,0);
+    }
+  }, {passive:false});
+
+  // ── Shop scroll: touch swipe ──────────────────────────────────────────────────
+  let shopTouchStartY=0;
+  canvas.addEventListener("touchstart", e => {
+    if (state==="shop") shopTouchStartY=e.touches[0].clientY;
+  }, {passive:true});
+  canvas.addEventListener("touchend", e => {
+    if (state!=="shop") return;
+    const dy=shopTouchStartY - e.changedTouches[0].clientY;
+    if (Math.abs(dy)<20) return; // ignore taps
+    const VISIBLE_ROWS=5;
+    const steps=Math.round(dy/50);
+    if (shopTab==="chars") {
+      shopCharIdx=Math.max(0,Math.min(CHAR_KEYS.length-1, shopCharIdx+steps));
+      if (shopCharIdx < shopCharScrollOffset) shopCharScrollOffset=shopCharIdx;
+      if (shopCharIdx >= shopCharScrollOffset+VISIBLE_ROWS) shopCharScrollOffset=shopCharIdx-VISIBLE_ROWS+1;
+    } else {
+      const sk=currentShopSkins();
+      shopSkinIdx=Math.max(0,Math.min(sk.length-1, shopSkinIdx+steps));
+    }
+  }, {passive:true});
+
+  // ── Shop UP/DOWN buttons (shown only in shop) ─────────────────────────────────
+  // We'll draw scroll arrows in the shop itself and handle via canvas click below
+
+  canvas.addEventListener("click", e => {
+    if (state!=="shop") return;
+    const rect=canvas.getBoundingClientRect();
+    const mx=(e.clientX-rect.left)*(W/rect.width);
+    const my=(e.clientY-rect.top)*(H/rect.height);
+    // Tab clicks
+    if (my>=155&&my<=195) {
+      if (mx>=80&&mx<=340)   { shopTab="chars"; }
+      if (mx>=360&&mx<=620)  { shopTab="skins"; shopSkinIdx=0; }
+    }
+    const rowH=54, startY=218;
+    const VISIBLE_ROWS=5;
+    // Arrow button clicks
+    const arrowX=W-58;
+    if (mx>=arrowX-16&&mx<=arrowX+16) {
+      if (my>=startY-50&&my<=startY-6) { // up arrow
+        shopCharIdx=Math.max(0,shopCharIdx-1);
+        if (shopCharIdx<shopCharScrollOffset) shopCharScrollOffset=shopCharIdx;
+      }
+      if (my>=startY+VISIBLE_ROWS*rowH+6&&my<=startY+VISIBLE_ROWS*rowH+34) { // down arrow
+        shopCharIdx=Math.min(CHAR_KEYS.length-1,shopCharIdx+1);
+        if (shopCharIdx>=shopCharScrollOffset+VISIBLE_ROWS) shopCharScrollOffset=shopCharIdx-VISIBLE_ROWS+1;
+      }
+    }
+    if (shopTab==="chars") {
+      CHAR_KEYS.forEach((ck,i) => {
+        const y=startY+(i-shopCharScrollOffset)*rowH;
+        if (mx>=80&&mx<=W-80&&my>=y-8&&my<=y+rowH-10&&i>=shopCharScrollOffset&&i<shopCharScrollOffset+VISIBLE_ROWS) {
+          shopCharIdx=i; buyOrEquipChar(ck);
+        }
+      });
+    } else {
+      currentShopSkins().forEach((sk,i) => {
+        const y=startY+i*rowH;
+        if (mx>=80&&mx<=W-80&&my>=y-8&&my<=y+rowH-10) { shopSkinIdx=i; buyOrEquipSkin(currentShopChar(),sk); }
+      });
+    }
+  });
+
+  // ── Drawing helpers ───────────────────────────────────────────────────────────
+  function drawRoundRect(x,y,w,h,r) {
+    r=Math.min(r,w/2,h/2);
+    ctx.beginPath();
+    ctx.moveTo(x+r,y);
+    ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+    ctx.arcTo(x,y+h,x,y,r);     ctx.arcTo(x,y,x+w,y,r);
+    ctx.closePath();
+  }
+  function drawSky() {
+    for (let i=0;i<12;i++) {
+      const u=i/11;
+      const r=Math.round(SKY1[0]+(SKY2[0]-SKY1[0])*u);
+      const g=Math.round(SKY1[1]+(SKY2[1]-SKY1[1])*u);
+      const b=Math.round(SKY1[2]+(SKY2[2]-SKY1[2])*u);
+      ctx.fillStyle=`rgb(${r},${g},${b})`; ctx.fillRect(0,i*(H/12),W,H/12+1);
+    }
+  }
+  function drawCloud(cl) {
+    ctx.save(); ctx.globalAlpha=0.9; ctx.fillStyle="white";
+    const {x,y,s}=cl;
+    for (const [ox,oy,rx,ry] of [[60,55,60,30],[120,40,70,35],[180,58,55,28]]) {
+      ctx.beginPath(); ctx.ellipse(x+ox*s,y+oy*s,rx*s,ry*s,0,0,Math.PI*2); ctx.fill();
+    }
+    ctx.restore();
+  }
+  function drawCenteredPanel(title,line1,line2) {
+    ctx.fillStyle="rgba(255,255,255,0.86)"; ctx.fillRect(0,0,W,H);
+    ctx.fillStyle=INK;
+    ctx.font="58px system-ui"; ctx.fillText(title,(W-ctx.measureText(title).width)/2,218);
+    ctx.font="26px system-ui"; ctx.fillText(line1,(W-ctx.measureText(line1).width)/2,274);
+    if (line2) { ctx.font="20px system-ui"; ctx.fillText(line2,(W-ctx.measureText(line2).width)/2,310); }
+  }
+
+  // ── Shared eye helper ─────────────────────────────────────────────────────────
+  function drawEye(cx,cy,r,irisCol="#1a1a1a") {
+    ctx.fillStyle="white"; ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle=irisCol; ctx.beginPath(); ctx.arc(cx+r*0.15,cy,r*0.55,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle="white"; ctx.beginPath(); ctx.arc(cx+r*0.38,cy-r*0.30,r*0.22,0,Math.PI*2); ctx.fill();
+  }
+
+  // ── Mini character preview (used in shop rows) ────────────────────────────────
+  // Draws a simplified character centred at (cx,cy), scaled by `sc`
+  function drawMiniChar(ck, skinKey, cx, cy, sc) {
+    const skin=CHARACTERS[ck].skins[skinKey];
+    const b=skin.body, v=skin.belly;
+    ctx.save(); ctx.translate(cx,cy); ctx.scale(sc,sc);
+    ctx.strokeStyle=INK; ctx.lineWidth=2/sc;
+
+    if (ck==="frog") {
+      ctx.fillStyle=b; drawRoundRect(-13,-16,26,30,8); ctx.fill(); ctx.stroke();
+      ctx.fillStyle=v; ctx.beginPath(); ctx.ellipse(0,6,7,5,0,0,Math.PI*2); ctx.fill();
+      for (const ex of [-1,1]) {
+        ctx.fillStyle=b; ctx.beginPath(); ctx.arc(ex*8,-20,7,0,Math.PI*2); ctx.fill(); ctx.stroke();
+        drawEye(ex*8,-20,4);
+      }
+    } else if (ck==="dog") {
+      ctx.fillStyle=b; drawRoundRect(-12,-12,24,28,6); ctx.fill(); ctx.stroke();
+      ctx.fillStyle=v; ctx.beginPath(); ctx.ellipse(0,8,6,5,0,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle=b; ctx.beginPath(); ctx.arc(0,-18,11,0,Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle=b;
+      ctx.beginPath(); ctx.ellipse(-13,-16,5,9,-0.3,0,Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.ellipse( 13,-16,5,9, 0.3,0,Math.PI*2); ctx.fill(); ctx.stroke();
+      drawEye(-5,-19,4); drawEye(5,-19,4);
+      ctx.fillStyle="#cc6644"; ctx.beginPath(); ctx.ellipse(0,-9,4,3,0,0,Math.PI*2); ctx.fill();
+    } else if (ck==="cat") {
+      ctx.fillStyle=b; drawRoundRect(-12,-12,24,28,6); ctx.fill(); ctx.stroke();
+      ctx.fillStyle=v; ctx.beginPath(); ctx.ellipse(0,8,6,5,0,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle=b; ctx.beginPath(); ctx.arc(0,-18,11,0,Math.PI*2); ctx.fill(); ctx.stroke();
+      for (const ex of [-1,1]) {
+        ctx.fillStyle=b;
+        ctx.beginPath(); ctx.moveTo(ex*3,-26); ctx.lineTo(ex*14,-40); ctx.lineTo(ex*14,-22); ctx.closePath();
+        ctx.fill(); ctx.stroke();
+      }
+      drawEye(-5,-19,4,"#1a6600"); drawEye(5,-19,4,"#1a6600");
+      ctx.strokeStyle=INK; ctx.lineWidth=1;
+      for (const [sx,sy,ex2,ey] of [[-2,-10,-16,-8],[-2,-10,-16,-13],[2,-10,16,-8],[2,-10,16,-13]]) {
+        ctx.beginPath(); ctx.moveTo(sx,sy); ctx.lineTo(ex2,ey); ctx.stroke();
+      }
+    } else if (ck==="monkey") {
+      ctx.fillStyle=b; drawRoundRect(-12,-12,24,28,6); ctx.fill(); ctx.stroke();
+      ctx.fillStyle=v; ctx.beginPath(); ctx.ellipse(0,8,7,6,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle=b; ctx.beginPath(); ctx.arc(0,-18,12,0,Math.PI*2); ctx.fill(); ctx.stroke();
+      for (const ex of [-1,1]) {
+        ctx.fillStyle=b; ctx.beginPath(); ctx.arc(ex*14,-18,6,0,Math.PI*2); ctx.fill(); ctx.stroke();
+        ctx.fillStyle=v; ctx.beginPath(); ctx.arc(ex*14,-18,3.5,0,Math.PI*2); ctx.fill();
+      }
+      ctx.fillStyle=v; ctx.beginPath(); ctx.ellipse(0,-11,7,4.5,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+      drawEye(-5,-20,4); drawEye(5,-20,4);
+    } else if (ck==="capybara") {
+      ctx.fillStyle=b; drawRoundRect(-14,-10,28,26,5); ctx.fill(); ctx.stroke();
+      ctx.fillStyle=v; ctx.beginPath(); ctx.ellipse(0,8,7,4,0,0,Math.PI*2); ctx.fill();
+      // Wide boxy head
+      ctx.fillStyle=b; drawRoundRect(-12,-26,24,18,5); ctx.fill(); ctx.stroke();
+      // Snout
+      ctx.fillStyle=v; ctx.beginPath(); ctx.ellipse(0,-10,7,4,0,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle=INK; ctx.beginPath(); ctx.arc(-4,-10,2,0,Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(4,-10,2,0,Math.PI*2); ctx.fill();
+      drawEye(-6,-20,4); drawEye(6,-20,4);
+      for (const ex of [-1,1]) { ctx.fillStyle=b; ctx.beginPath(); ctx.arc(ex*10,-27,5,0,Math.PI*2); ctx.fill(); ctx.stroke(); }
+    } else if (ck==="hippo") {
+      ctx.fillStyle=b; ctx.beginPath(); ctx.ellipse(0,8,18,14,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle=v; ctx.beginPath(); ctx.ellipse(0,12,11,7,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle=b; ctx.beginPath(); ctx.ellipse(0,-14,16,10,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle=v; ctx.beginPath(); ctx.ellipse(0,-8,12,6,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle=INK; ctx.beginPath(); ctx.arc(-5,-8,2.5,0,Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(5,-8,2.5,0,Math.PI*2); ctx.fill();
+      for (const ex of [-1,1]) { ctx.fillStyle=b; ctx.beginPath(); ctx.arc(ex*14,-20,6,0,Math.PI*2); ctx.fill(); ctx.stroke(); }
+      drawEye(-7,-19,4); drawEye(7,-19,4);
+    } else if (ck==="elephant") {
+      ctx.fillStyle=b; ctx.beginPath(); ctx.ellipse(0,8,18,14,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle=v; ctx.beginPath(); ctx.ellipse(0,12,9,6,0,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle=b; ctx.beginPath(); ctx.arc(-2,-14,13,0,Math.PI*2); ctx.fill(); ctx.stroke();
+      for (const ex of [-1,1]) { ctx.fillStyle=b; ctx.beginPath(); ctx.ellipse(ex*17,-12,7,10,ex*0.3,0,Math.PI*2); ctx.fill(); ctx.stroke(); ctx.fillStyle=v; ctx.beginPath(); ctx.ellipse(ex*17,-12,4,6,ex*0.3,0,Math.PI*2); ctx.fill(); }
+      // Trunk
+      ctx.strokeStyle=b; ctx.lineWidth=5; ctx.beginPath(); ctx.moveTo(-2,-4); ctx.quadraticCurveTo(8,4,6,14); ctx.stroke();
+      ctx.strokeStyle=INK; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(-2,-4); ctx.quadraticCurveTo(8,4,6,14); ctx.stroke();
+      drawEye(-7,-17,4); drawEye(5,-17,4);
+    } else if (ck==="puffin") {
+      ctx.fillStyle=b; ctx.beginPath(); ctx.ellipse(0,8,14,16,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle=v; ctx.beginPath(); ctx.ellipse(2,10,9,11,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle=b; ctx.beginPath(); ctx.arc(0,-16,11,0,Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle="white"; ctx.beginPath(); ctx.ellipse(4,-15,7,5,0.2,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle="#ff8800"; ctx.beginPath(); ctx.moveTo(9,-18); ctx.lineTo(18,-14); ctx.lineTo(9,-10); ctx.closePath(); ctx.fill(); ctx.stroke();
+      drawEye(4,-18,4);
+    } else if (ck==="axolotl") {
+      const gc=b==="#f0a0b8"?"#e06080":b==="#f8eedd"?"#e8c8a8":b==="#f0c840"?"#e09020":"#446633";
+      ctx.fillStyle=b; ctx.beginPath(); ctx.ellipse(0,8,15,13,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle=v; ctx.beginPath(); ctx.ellipse(0,12,9,7,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle=b; ctx.beginPath(); ctx.arc(-2,-16,13,0,Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle=v; ctx.beginPath(); ctx.ellipse(-2,-10,8,5,0,0,Math.PI*2); ctx.fill();
+      // Gills
+      for (const ex of [-1,1]) {
+        for (let g=0;g<3;g++) {
+          ctx.strokeStyle=gc; ctx.lineWidth=2.5;
+          ctx.beginPath(); ctx.moveTo(ex*(12+g*4),-16+g*3); ctx.lineTo(ex*(16+g*4),-28+g*2); ctx.stroke();
+          ctx.fillStyle=gc; ctx.beginPath(); ctx.ellipse(ex*(16+g*4),-28+g*2,3,5,ex*0.4,0,Math.PI*2); ctx.fill();
+        }
+      }
+      drawEye(-7,-19,4); drawEye(5,-19,4);
+    }
+    ctx.restore();
+  }
+
+  // ── Shop drawing ──────────────────────────────────────────────────────────────
+  function drawShop() {
+    drawSky(); clouds.forEach(drawCloud);
+
+    // Panel
+    ctx.fillStyle="rgba(255,255,255,0.93)"; drawRoundRect(36,44,W-72,H-88,20); ctx.fill();
+    ctx.strokeStyle=INK; ctx.lineWidth=3; drawRoundRect(36,44,W-72,H-88,20); ctx.stroke();
+
+    // Header
+    ctx.fillStyle=INK; ctx.font="bold 48px system-ui";
+    ctx.fillText("SHOP",(W-ctx.measureText("SHOP").width)/2,104);
+    ctx.font="17px system-ui";
+    ctx.fillText(`💰 ${save.wallet} coins   🏆 Best: ${save.best}   Assist: ${assist?"ON":"OFF"} (A key)`,90,136);
+
+    // Tabs
+    const tabDefs=[["chars","🐾 Characters"],["skins","🎨 Skins"]];
+    tabDefs.forEach(([tab,label],ti) => {
+      const tx=80+ti*290, tw=270, ty=155, th=38;
+      ctx.fillStyle = shopTab===tab ? INK : "rgba(0,0,0,0.06)";
+      drawRoundRect(tx,ty,tw,th,10); ctx.fill();
+      ctx.strokeStyle=INK; ctx.lineWidth=2; drawRoundRect(tx,ty,tw,th,10); ctx.stroke();
+      ctx.fillStyle=shopTab===tab?"white":INK; ctx.font="bold 17px system-ui";
+      ctx.fillText(label, tx+(tw-ctx.measureText(label).width)/2, ty+25);
+    });
+
+    ctx.font="14px system-ui"; ctx.fillStyle="rgba(35,35,35,0.45)";
+    ctx.fillText("Tab=switch tabs  •  ↑/↓ navigate  •  Enter select  •  Esc close  •  click rows",90,208);
+
+    const rowH=54, startY=218;
+    // Characters tab uses scrolling since we have 9 characters
+    const VISIBLE_ROWS = 5;
+
+    if (shopTab==="chars") {
+      // Clip to list area
+      ctx.save();
+      ctx.beginPath(); ctx.rect(60, startY-10, W-120, VISIBLE_ROWS*rowH+10); ctx.clip();
+
+      CHAR_KEYS.forEach((ck,i) => {
+        const ch=CHARACTERS[ck];
+        const owned=save.ownedChars.includes(ck);
+        const equipped=save.character===ck;
+        const isSel=i===shopCharIdx;
+        const y=startY+(i-shopCharScrollOffset)*rowH;
+
+        // Row background
+        ctx.fillStyle=equipped?"rgba(50,210,90,0.13)":isSel?"rgba(35,35,35,0.07)":"rgba(0,0,0,0.02)";
+        drawRoundRect(80,y-6,W-160,rowH-6,12); ctx.fill();
+        if (isSel||equipped) {
+          ctx.strokeStyle=equipped?"#30b060":INK; ctx.lineWidth=2;
+          drawRoundRect(80,y-6,W-160,rowH-6,12); ctx.stroke();
+        }
+
+        // Mini character preview
+        const sk=activeSkinKey(ck);
+        drawMiniChar(ck, sk, 128, y+rowH/2-8, 0.72);
+
+        ctx.fillStyle=INK; ctx.font="bold 20px system-ui";
+        const arrow=isSel?"▶ ":"   ";
+        let badge="";
+        if (equipped) badge=" ✓ PLAYING";
+        else if (owned) badge=" (owned)";
+        else badge=` — ${ch.cost} coins`;
+        ctx.fillText(arrow+ch.label+badge, 168, y+18);
+
+        // Equipped skin name
+        const skinLabel=CHARACTERS[ck].skins[sk].label;
+        ctx.font="13px system-ui"; ctx.fillStyle="rgba(35,35,35,0.5)";
+        ctx.fillText(`Skin: ${skinLabel}`, 172, y+38);
+      });
+      ctx.restore();
+
+      // Scroll indicator + arrow buttons
+      if (CHAR_KEYS.length > VISIBLE_ROWS) {
+        const scrollH = VISIBLE_ROWS*rowH;
+        const thumbH = Math.max(30, scrollH * VISIBLE_ROWS / CHAR_KEYS.length);
+        const thumbY = startY-6 + (shopCharScrollOffset/(CHAR_KEYS.length-VISIBLE_ROWS))*(scrollH-thumbH);
+        ctx.fillStyle="rgba(0,0,0,0.10)"; drawRoundRect(W-68,startY-6,8,scrollH,4); ctx.fill();
+        ctx.fillStyle="rgba(0,0,0,0.32)"; drawRoundRect(W-68,thumbY,8,thumbH,4); ctx.fill();
+        // Up arrow button
+        const arrowX=W-58, upY=startY-34, dnY=startY+scrollH+6;
+        ctx.fillStyle=shopCharScrollOffset>0?"rgba(35,35,35,0.85)":"rgba(35,35,35,0.2)";
+        drawRoundRect(arrowX-16,upY-16,32,28,8); ctx.fill();
+        ctx.fillStyle="white"; ctx.font="bold 16px system-ui";
+        ctx.fillText("▲", arrowX-(ctx.measureText("▲").width/2), upY+5);
+        // Down arrow button
+        ctx.fillStyle=shopCharScrollOffset<CHAR_KEYS.length-VISIBLE_ROWS?"rgba(35,35,35,0.85)":"rgba(35,35,35,0.2)";
+        drawRoundRect(arrowX-16,dnY,32,28,8); ctx.fill();
+        ctx.fillStyle="white";
+        ctx.fillText("▼", arrowX-(ctx.measureText("▼").width/2), dnY+18);
+        // hint text
+        ctx.fillStyle="rgba(35,35,35,0.4)"; ctx.font="12px system-ui";
+        ctx.fillText("scroll or swipe", arrowX-40, dnY+40);
+      }
+
+    } else {
+      // Skins tab
+      const ck=currentShopChar();
+      const ch=CHARACTERS[ck];
+      const charOwned=save.ownedChars.includes(ck);
+
+      ctx.fillStyle=INK; ctx.font="bold 18px system-ui";
+      ctx.fillText(`Skins for: ${ch.label}`, 90, 220);
+      if (!charOwned) {
+        ctx.fillStyle="#cc3333"; ctx.font="15px system-ui";
+        ctx.fillText(`⚠ Unlock ${ch.label} first (${ch.cost} coins) to use these skins`, 90, 238);
+      }
+      const sy=charOwned?startY:startY+20;
+      currentShopSkins().forEach((sk,i) => {
+        const skin=ch.skins[sk];
+        const ownedSk=(save.ownedSkins[ck]??[]).includes(sk);
+        const equipped=activeSkinKey(ck)===sk && save.character===ck;
+        const isSel=i===shopSkinIdx;
+        const y=sy+i*rowH;
+
+        ctx.fillStyle=equipped?"rgba(50,210,90,0.13)":isSel?"rgba(35,35,35,0.07)":"rgba(0,0,0,0.02)";
+        drawRoundRect(80,y-6,W-160,rowH-6,12); ctx.fill();
+        if (isSel||equipped) {
+          ctx.strokeStyle=equipped?"#30b060":INK; ctx.lineWidth=2;
+          drawRoundRect(80,y-6,W-160,rowH-6,12); ctx.stroke();
+        }
+
+        drawMiniChar(ck, sk, 128, y+rowH/2-10, 0.80);
+
+        ctx.fillStyle=INK; ctx.font="bold 22px system-ui";
+        const arrow=isSel?"▶ ":"   ";
+        let badge="";
+        if (equipped)  badge=" ✓ EQUIPPED";
+        else if (ownedSk) badge=" (owned — click to equip)";
+        else badge=` — ${skin.cost} coins`;
+        ctx.fillText(arrow+skin.label+badge, 168, y+28);
+      });
+    }
+
+    ctx.font="15px system-ui"; ctx.fillStyle="rgba(35,35,35,0.4)";
+    ctx.fillText("Power-ups available via 1/2/3 buttons during a run", 90, H-52);
+  }
+
+  // ── Character draw functions ───────────────────────────────────────────────────
+  // Each receives (px, py, pw, ph, bodyCol, bellyCol, tt, ducking, now)
+  // px/py = top-left corner, pw/ph = visual (squashed/stretched) size
+
+  function drawFrog(px,py,pw,ph,body,belly,tt,ducking,now) {
+    const cx=px+pw/2;
+    ctx.strokeStyle=INK; ctx.lineWidth=3;
+    ctx.fillStyle=body; drawRoundRect(px,py,pw,ph,16); ctx.fill(); ctx.stroke();
+    ctx.fillStyle=belly; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.ellipse(cx,py+ph*0.70,pw*0.32,ph*0.22,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.lineWidth=2;
+    if (!ducking) {
+      // Bulging eyes sit on top of head
+      for (const ex of [-1,1]) {
+        const ox=cx+ex*pw*0.22, oy=py-ph*0.07;
+        ctx.fillStyle="#78eb91"; ctx.beginPath(); ctx.arc(ox,oy,10,0,Math.PI*2); ctx.fill(); ctx.stroke();
+        drawEye(ox,oy,6);
+      }
+    } else {
+      for (const ex of [-1,1]) {
+        const ox=cx+ex*pw*0.22, oy=py+ph*0.25;
+        ctx.fillStyle="#78eb91"; ctx.beginPath(); ctx.arc(ox,oy,7,0,Math.PI*2); ctx.fill(); ctx.stroke();
+        drawEye(ox,oy,4);
+      }
+    }
+    ctx.strokeStyle=INK; ctx.lineWidth=2.5;
+    ctx.beginPath(); ctx.arc(cx,py+ph*0.58,pw*0.18,0.1,Math.PI-0.1); ctx.stroke();
+  }
+
+  function drawDog(px,py,pw,ph,body,belly,tt,ducking,now) {
+    const cx=px+pw/2;
+    ctx.strokeStyle=INK; ctx.lineWidth=3;
+    // Body
+    ctx.fillStyle=body; drawRoundRect(px,py+ph*0.22,pw,ph*0.78,14); ctx.fill(); ctx.stroke();
+    ctx.fillStyle=belly; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.ellipse(cx,py+ph*0.76,pw*0.28,ph*0.17,0,0,Math.PI*2); ctx.fill();
+    // Head circle
+    const hcx=cx, hcy=py+ph*0.18;
+    ctx.fillStyle=body; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.arc(hcx,hcy,pw*0.38,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    // Floppy ears
+    ctx.fillStyle=body;
+    ctx.beginPath(); ctx.ellipse(hcx-pw*0.40,hcy+ph*0.04,pw*0.13,ph*0.21,-0.35,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(hcx+pw*0.40,hcy+ph*0.04,pw*0.13,ph*0.21, 0.35,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    // Inner ear tone
+    ctx.fillStyle=belly; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.ellipse(hcx-pw*0.40,hcy+ph*0.04,pw*0.07,ph*0.12,-0.35,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(hcx+pw*0.40,hcy+ph*0.04,pw*0.07,ph*0.12, 0.35,0,Math.PI*2); ctx.fill();
+    // Eyes & nose
+    drawEye(hcx-pw*0.16,hcy-ph*0.02,6);
+    drawEye(hcx+pw*0.16,hcy-ph*0.02,6);
+    ctx.fillStyle="#cc6644"; ctx.strokeStyle=INK; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.ellipse(hcx,hcy+ph*0.10,pw*0.10,ph*0.065,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    // Waggling tongue
+    if (!ducking) {
+      const wag=Math.sin(tt*12)*0.15;
+      ctx.fillStyle="#ff7799"; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.ellipse(hcx+wag*pw*0.3,hcy+ph*0.20,pw*0.09,ph*0.08,wag,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    }
+    // Wagging tail
+    const tw=Math.sin(tt*10)*0.5;
+    ctx.strokeStyle=body; ctx.lineWidth=8;
+    ctx.beginPath(); ctx.moveTo(px+pw,py+ph*0.38); ctx.quadraticCurveTo(px+pw+pw*0.35,py+ph*0.18+tw*ph*0.15,px+pw+pw*0.28,py+ph*0.06); ctx.stroke();
+    ctx.strokeStyle=INK; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.moveTo(px+pw,py+ph*0.38); ctx.quadraticCurveTo(px+pw+pw*0.35,py+ph*0.18+tw*ph*0.15,px+pw+pw*0.28,py+ph*0.06); ctx.stroke();
+  }
+
+  function drawCat(px,py,pw,ph,body,belly,tt,ducking,now) {
+    const cx=px+pw/2;
+    ctx.strokeStyle=INK; ctx.lineWidth=3;
+    ctx.fillStyle=body; drawRoundRect(px,py+ph*0.22,pw,ph*0.78,12); ctx.fill(); ctx.stroke();
+    ctx.fillStyle=belly; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.ellipse(cx,py+ph*0.73,pw*0.25,ph*0.17,0,0,Math.PI*2); ctx.fill();
+    const hcx=cx, hcy=py+ph*0.16;
+    ctx.fillStyle=body; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.arc(hcx,hcy,pw*0.36,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    // Pointy ears
+    for (const ex of [-1,1]) {
+      ctx.fillStyle=body;
+      ctx.beginPath();
+      ctx.moveTo(hcx+ex*pw*0.18,hcy-pw*0.24);
+      ctx.lineTo(hcx+ex*pw*0.43,hcy-pw*0.52);
+      ctx.lineTo(hcx+ex*pw*0.43,hcy-pw*0.17);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle="#ffaaaa"; ctx.lineWidth=1;
+      ctx.beginPath();
+      ctx.moveTo(hcx+ex*pw*0.21,hcy-pw*0.25);
+      ctx.lineTo(hcx+ex*pw*0.38,hcy-pw*0.45);
+      ctx.lineTo(hcx+ex*pw*0.38,hcy-pw*0.20);
+      ctx.closePath(); ctx.fill();
+    }
+    drawEye(hcx-pw*0.16,hcy-ph*0.02,6,"#1a6600");
+    drawEye(hcx+pw*0.16,hcy-ph*0.02,6,"#1a6600");
+    // Tiny nose
+    ctx.fillStyle="#cc9988"; ctx.strokeStyle=INK; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(hcx,hcy+ph*0.08); ctx.lineTo(hcx-3,hcy+ph*0.115); ctx.lineTo(hcx+3,hcy+ph*0.115); ctx.closePath(); ctx.fill(); ctx.stroke();
+    // Whiskers
+    ctx.strokeStyle=INK; ctx.lineWidth=1.5;
+    for (const [sx,sy,ex2,ey] of [
+      [-pw*0.13,ph*0.10,-pw*0.50,ph*0.08],[-pw*0.13,ph*0.13,-pw*0.50,ph*0.17],
+      [ pw*0.13,ph*0.10, pw*0.50,ph*0.08],[ pw*0.13,ph*0.13, pw*0.50,ph*0.17],
+    ]) { ctx.beginPath(); ctx.moveTo(hcx+sx,hcy+sy); ctx.lineTo(hcx+ex2,hcy+ey); ctx.stroke(); }
+    // Swishing tail
+    const tc=Math.sin(tt*6)*0.4;
+    ctx.strokeStyle=body; ctx.lineWidth=7;
+    ctx.beginPath(); ctx.moveTo(px+pw,py+ph*0.65); ctx.quadraticCurveTo(px+pw+pw*0.5,py+ph*0.30+tc*ph*0.2,px+pw+pw*0.35,py+ph*0.05); ctx.stroke();
+    ctx.strokeStyle=INK; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.moveTo(px+pw,py+ph*0.65); ctx.quadraticCurveTo(px+pw+pw*0.5,py+ph*0.30+tc*ph*0.2,px+pw+pw*0.35,py+ph*0.05); ctx.stroke();
+  }
+
+  function drawMonkey(px,py,pw,ph,body,belly,tt,ducking,now) {
+    const cx=px+pw/2;
+    ctx.strokeStyle=INK; ctx.lineWidth=3;
+    ctx.fillStyle=body; drawRoundRect(px,py+ph*0.18,pw,ph*0.82,12); ctx.fill(); ctx.stroke();
+    ctx.fillStyle=belly; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.ellipse(cx,py+ph*0.68,pw*0.30,ph*0.22,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    // Little arms
+    ctx.strokeStyle=body; ctx.lineWidth=8;
+    ctx.beginPath(); ctx.moveTo(px+pw*0.1,py+ph*0.45); ctx.lineTo(px-pw*0.18,py+ph*0.60); ctx.stroke();
+    ctx.strokeStyle=INK; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.moveTo(px+pw*0.1,py+ph*0.45); ctx.lineTo(px-pw*0.18,py+ph*0.60); ctx.stroke();
+    const hcx=cx, hcy=py+ph*0.14;
+    ctx.fillStyle=body; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.arc(hcx,hcy,pw*0.40,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    // Big round ears
+    for (const ex of [-1,1]) {
+      ctx.fillStyle=body; ctx.beginPath(); ctx.arc(hcx+ex*pw*0.43,hcy,pw*0.18,0,Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle=belly; ctx.beginPath(); ctx.arc(hcx+ex*pw*0.43,hcy,pw*0.10,0,Math.PI*2); ctx.fill();
+    }
+    // Muzzle
+    ctx.fillStyle=belly; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.ellipse(hcx,hcy+ph*0.11,pw*0.22,ph*0.10,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle=INK; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.ellipse(hcx,hcy+ph*0.10,pw*0.06,ph*0.04,0,0,Math.PI*2); ctx.fill();
+    drawEye(hcx-pw*0.16,hcy-ph*0.03,6);
+    drawEye(hcx+pw*0.16,hcy-ph*0.03,6);
+    // Curly tail
+    const tc=Math.sin(tt*5)*0.5;
+    ctx.strokeStyle=body; ctx.lineWidth=8;
+    ctx.beginPath(); ctx.moveTo(px+pw,py+ph*0.50); ctx.bezierCurveTo(px+pw+pw*0.5,py+ph*0.2+tc*ph*0.3,px+pw+pw*0.5,py-ph*0.1,px+pw+pw*0.25,py-ph*0.15); ctx.stroke();
+    ctx.strokeStyle=INK; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.moveTo(px+pw,py+ph*0.50); ctx.bezierCurveTo(px+pw+pw*0.5,py+ph*0.2+tc*ph*0.3,px+pw+pw*0.5,py-ph*0.1,px+pw+pw*0.25,py-ph*0.15); ctx.stroke();
+  }
+
+
+  // ── Capybara ──────────────────────────────────────────────────────────────────
+  function drawCapybara(px,py,pw,ph,body,belly,tt,ducking,now) {
+    const cx=px+pw/2;
+    ctx.strokeStyle=INK; ctx.lineWidth=3;
+    // Long boxy body
+    ctx.fillStyle=body; drawRoundRect(px,py+ph*0.25,pw,ph*0.75,10); ctx.fill(); ctx.stroke();
+    // Belly
+    ctx.fillStyle=belly; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.ellipse(cx,py+ph*0.78,pw*0.32,ph*0.14,0,0,Math.PI*2); ctx.fill();
+    // Square snout head
+    const hcx=cx-pw*0.05, hcy=py+ph*0.20;
+    ctx.fillStyle=body; ctx.lineWidth=3;
+    drawRoundRect(hcx-pw*0.34,hcy-ph*0.12,pw*0.68,ph*0.30,8); ctx.fill(); ctx.stroke();
+    // Big boxy snout
+    ctx.fillStyle=body;
+    drawRoundRect(hcx-pw*0.22,hcy+ph*0.08,pw*0.44,ph*0.18,6); ctx.fill(); ctx.stroke();
+    ctx.fillStyle=belly;
+    drawRoundRect(hcx-pw*0.16,hcy+ph*0.10,pw*0.32,ph*0.12,4); ctx.fill();
+    // Nostrils
+    ctx.fillStyle=INK;
+    ctx.beginPath(); ctx.arc(hcx-pw*0.07,hcy+ph*0.14,2.5,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(hcx+pw*0.07,hcy+ph*0.14,2.5,0,Math.PI*2); ctx.fill();
+    // Small round ears
+    for (const ex of [-1,1]) {
+      ctx.fillStyle=body; ctx.strokeStyle=INK; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.arc(hcx+ex*pw*0.28,hcy-ph*0.10,pw*0.10,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    }
+    // Eyes
+    drawEye(hcx-pw*0.16,hcy-ph*0.04,5);
+    drawEye(hcx+pw*0.16,hcy-ph*0.04,5);
+    // Tiny tail
+    ctx.strokeStyle=body; ctx.lineWidth=6;
+    ctx.beginPath(); ctx.moveTo(px+pw,py+ph*0.40); ctx.lineTo(px+pw+pw*0.12,py+ph*0.34); ctx.stroke();
+    ctx.strokeStyle=INK; ctx.lineWidth=2.5;
+    ctx.beginPath(); ctx.moveTo(px+pw,py+ph*0.40); ctx.lineTo(px+pw+pw*0.12,py+ph*0.34); ctx.stroke();
+  }
+
+  // ── Hippo ─────────────────────────────────────────────────────────────────────
+  function drawHippo(px,py,pw,ph,body,belly,tt,ducking,now) {
+    const cx=px+pw/2;
+    ctx.strokeStyle=INK; ctx.lineWidth=3;
+    // Chunky barrel body
+    ctx.fillStyle=body;
+    ctx.beginPath(); ctx.ellipse(cx,py+ph*0.65,pw*0.52,ph*0.38,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    // Belly
+    ctx.fillStyle=belly; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.ellipse(cx,py+ph*0.72,pw*0.34,ph*0.22,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    // Huge wide head
+    const hcx=cx, hcy=py+ph*0.22;
+    ctx.fillStyle=body; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.ellipse(hcx,hcy,pw*0.46,ph*0.24,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    // Massive snout / muzzle
+    ctx.fillStyle=belly; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.ellipse(hcx,hcy+ph*0.14,pw*0.36,ph*0.14,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    // Nostrils
+    ctx.fillStyle=INK;
+    ctx.beginPath(); ctx.arc(hcx-pw*0.10,hcy+ph*0.16,3.5,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(hcx+pw*0.10,hcy+ph*0.16,3.5,0,Math.PI*2); ctx.fill();
+    // Perky ears on top
+    for (const ex of [-1,1]) {
+      ctx.fillStyle=body; ctx.strokeStyle=INK; ctx.lineWidth=2.5;
+      ctx.beginPath(); ctx.arc(hcx+ex*pw*0.38,hcy-ph*0.18,pw*0.11,0,Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle=belly; ctx.beginPath(); ctx.arc(hcx+ex*pw*0.38,hcy-ph*0.18,pw*0.06,0,Math.PI*2); ctx.fill();
+    }
+    // Eyes on top of head (hippos have eyes up high)
+    drawEye(hcx-pw*0.18,hcy-ph*0.08,6);
+    drawEye(hcx+pw*0.18,hcy-ph*0.08,6);
+    // Tusk nubs
+    ctx.fillStyle="#fffacc"; ctx.strokeStyle=INK; ctx.lineWidth=2;
+    for (const ex of [-1,1]) {
+      ctx.beginPath(); ctx.ellipse(hcx+ex*pw*0.18,hcy+ph*0.24,4,7,ex*0.2,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    }
+    // Stubby tail
+    const tw=Math.sin(tt*8)*0.3;
+    ctx.strokeStyle=body; ctx.lineWidth=6;
+    ctx.beginPath(); ctx.moveTo(px+pw*0.9,py+ph*0.55); ctx.quadraticCurveTo(px+pw+pw*0.2,py+ph*0.45+tw*ph*0.1,px+pw+pw*0.18,py+ph*0.38); ctx.stroke();
+    ctx.strokeStyle=INK; ctx.lineWidth=2.5;
+    ctx.beginPath(); ctx.moveTo(px+pw*0.9,py+ph*0.55); ctx.quadraticCurveTo(px+pw+pw*0.2,py+ph*0.45+tw*ph*0.1,px+pw+pw*0.18,py+ph*0.38); ctx.stroke();
+  }
+
+  // ── Elephant ──────────────────────────────────────────────────────────────────
+  function drawElephant(px,py,pw,ph,body,belly,tt,ducking,now) {
+    const cx=px+pw/2;
+    ctx.strokeStyle=INK; ctx.lineWidth=3;
+    // Body
+    ctx.fillStyle=body;
+    ctx.beginPath(); ctx.ellipse(cx,py+ph*0.65,pw*0.50,ph*0.36,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle=belly; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.ellipse(cx,py+ph*0.72,pw*0.28,ph*0.18,0,0,Math.PI*2); ctx.fill();
+    // Head
+    const hcx=cx-pw*0.05, hcy=py+ph*0.22;
+    ctx.fillStyle=body; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.arc(hcx,hcy,pw*0.38,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    // Big floppy ears
+    for (const ex of [-1,1]) {
+      ctx.fillStyle=body;
+      ctx.beginPath(); ctx.ellipse(hcx+ex*pw*0.50,hcy+ph*0.04,pw*0.20,ph*0.28,ex*0.25,0,Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle=belly; ctx.lineWidth=1.5;
+      ctx.beginPath(); ctx.ellipse(hcx+ex*pw*0.50,hcy+ph*0.06,pw*0.12,ph*0.18,ex*0.25,0,Math.PI*2); ctx.fill();
+    }
+    // Trunk — swings gently
+    const trunkSwing=Math.sin(tt*4)*0.18;
+    ctx.strokeStyle=body; ctx.lineWidth=10;
+    ctx.beginPath();
+    ctx.moveTo(hcx,hcy+ph*0.20);
+    ctx.quadraticCurveTo(hcx+trunkSwing*pw*0.8, hcy+ph*0.44, hcx-pw*0.10+trunkSwing*pw*0.5, hcy+ph*0.52);
+    ctx.stroke();
+    ctx.strokeStyle=INK; ctx.lineWidth=3;
+    ctx.beginPath();
+    ctx.moveTo(hcx,hcy+ph*0.20);
+    ctx.quadraticCurveTo(hcx+trunkSwing*pw*0.8, hcy+ph*0.44, hcx-pw*0.10+trunkSwing*pw*0.5, hcy+ph*0.52);
+    ctx.stroke();
+    // Eyes
+    drawEye(hcx-pw*0.14,hcy-ph*0.06,5);
+    drawEye(hcx+pw*0.14,hcy-ph*0.06,5);
+    // Tusk
+    ctx.fillStyle="#fffacc"; ctx.strokeStyle=INK; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.ellipse(hcx+pw*0.12,hcy+ph*0.16,5,10,0.4,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    // Tail
+    const etw=Math.sin(tt*7)*0.3;
+    ctx.strokeStyle=body; ctx.lineWidth=5;
+    ctx.beginPath(); ctx.moveTo(px+pw*0.88,py+ph*0.52); ctx.quadraticCurveTo(px+pw+pw*0.15,py+ph*0.40+etw*ph*0.15,px+pw+pw*0.12,py+ph*0.30); ctx.stroke();
+    ctx.strokeStyle=INK; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(px+pw*0.88,py+ph*0.52); ctx.quadraticCurveTo(px+pw+pw*0.15,py+ph*0.40+etw*ph*0.15,px+pw+pw*0.12,py+ph*0.30); ctx.stroke();
+  }
+
+  // ── Puffin ────────────────────────────────────────────────────────────────────
+  function drawPuffin(px,py,pw,ph,body,belly,tt,ducking,now) {
+    const cx=px+pw/2;
+    const isRainbow = (belly === "#ffffff" && body === "#111111" && activeSkinKey("puffin")==="rainbow");
+    ctx.strokeStyle=INK; ctx.lineWidth=3;
+    // Round egg-shaped body
+    ctx.fillStyle=body;
+    ctx.beginPath(); ctx.ellipse(cx,py+ph*0.62,pw*0.44,ph*0.40,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    // White belly
+    ctx.fillStyle=belly; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.ellipse(cx+pw*0.04,py+ph*0.65,pw*0.28,ph*0.28,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    // Round black head
+    const hcx=cx, hcy=py+ph*0.20;
+    ctx.fillStyle=body; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.arc(hcx,hcy,pw*0.34,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    // White face patch
+    ctx.fillStyle="white"; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.ellipse(hcx+pw*0.08,hcy+ph*0.02,pw*0.20,ph*0.14,0.2,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    // Colourful beak — triangle
+    const beakCol = isRainbow ? null : "#ff8800";
+    if (isRainbow) {
+      // Striped rainbow beak
+      const bx=hcx+pw*0.28, by=hcy+ph*0.02;
+      const cols=["#ff2200","#ff8800","#ffee00"];
+      cols.forEach((c,i)=>{ ctx.fillStyle=c; ctx.beginPath(); ctx.moveTo(bx,by-5+i*4); ctx.lineTo(bx+pw*0.22,by+2); ctx.lineTo(bx,by+3+i*4); ctx.closePath(); ctx.fill(); });
+      ctx.strokeStyle=INK; ctx.lineWidth=1.5;
+      ctx.beginPath(); ctx.moveTo(bx,by-5); ctx.lineTo(bx+pw*0.22,by+2); ctx.lineTo(bx,by+11); ctx.closePath(); ctx.stroke();
+    } else {
+      ctx.fillStyle=beakCol; ctx.strokeStyle=INK; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.moveTo(hcx+pw*0.26,hcy-ph*0.04); ctx.lineTo(hcx+pw*0.50,hcy+ph*0.02); ctx.lineTo(hcx+pw*0.26,hcy+ph*0.10); ctx.closePath(); ctx.fill(); ctx.stroke();
+    }
+    // Eye
+    drawEye(hcx+pw*0.14,hcy-ph*0.04,5);
+    // Wings — flap gently while running
+    const flap=Math.sin(tt*14)*0.3;
+    for (const ex of [-1,1]) {
+      ctx.fillStyle=body; ctx.strokeStyle=INK; ctx.lineWidth=2.5;
+      ctx.beginPath();
+      ctx.moveTo(cx,py+ph*0.50);
+      ctx.quadraticCurveTo(cx+ex*pw*0.62, py+ph*0.38+flap*ex*ph*0.18, cx+ex*pw*0.58, py+ph*0.64+flap*ex*ph*0.08);
+      ctx.quadraticCurveTo(cx+ex*pw*0.34, py+ph*0.72, cx, py+ph*0.60);
+      ctx.fill(); ctx.stroke();
+    }
+    // Orange feet
+    ctx.strokeStyle="#ff8800"; ctx.lineWidth=3.5;
+    for (const fx of [cx-pw*0.10, cx+pw*0.10]) {
+      ctx.beginPath(); ctx.moveTo(fx,py+ph*0.98); ctx.lineTo(fx,py+ph+8); ctx.stroke();
+      ctx.lineWidth=2.5;
+      for (const dx of [-8,0,8]) { ctx.beginPath(); ctx.moveTo(fx,py+ph+8); ctx.lineTo(fx+dx,py+ph+16); ctx.stroke(); }
+      ctx.lineWidth=3.5;
+    }
+  }
+
+  // ── Axolotl ───────────────────────────────────────────────────────────────────
+  function drawAxolotl(px,py,pw,ph,body,belly,tt,ducking,now) {
+    const cx=px+pw/2;
+    // Gill colour — slightly darker/redder than body
+    const gillCol = body==="#f0a0b8"?"#e06080":body==="#f8eedd"?"#e8c8a8":body==="#f0c840"?"#e09020":"#446633";
+    ctx.strokeStyle=INK; ctx.lineWidth=3;
+    // Salamander body — long oval
+    ctx.fillStyle=body;
+    ctx.beginPath(); ctx.ellipse(cx,py+ph*0.65,pw*0.48,ph*0.35,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    // Belly
+    ctx.fillStyle=belly; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.ellipse(cx,py+ph*0.70,pw*0.30,ph*0.20,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    // Tail — wavy
+    const tw=Math.sin(tt*8)*0.4;
+    ctx.strokeStyle=body; ctx.lineWidth=10;
+    ctx.beginPath(); ctx.moveTo(px+pw*0.88,py+ph*0.60); ctx.quadraticCurveTo(px+pw+pw*0.28,py+ph*0.50+tw*ph*0.20,px+pw+pw*0.38,py+ph*0.40+tw*ph*0.15); ctx.stroke();
+    ctx.strokeStyle=INK; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.moveTo(px+pw*0.88,py+ph*0.60); ctx.quadraticCurveTo(px+pw+pw*0.28,py+ph*0.50+tw*ph*0.20,px+pw+pw*0.38,py+ph*0.40+tw*ph*0.15); ctx.stroke();
+    // Head — cute wide round face
+    const hcx=cx-pw*0.06, hcy=py+ph*0.22;
+    ctx.fillStyle=body; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.arc(hcx,hcy,pw*0.38,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    // Face belly patch
+    ctx.fillStyle=belly; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.ellipse(hcx,hcy+ph*0.06,pw*0.22,ph*0.12,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    // External feathery gills — 3 stalks each side, wave gently
+    for (const ex of [-1,1]) {
+      for (let g=0; g<3; g++) {
+        const gx=hcx+ex*pw*(0.28+g*0.06);
+        const gy=hcy-ph*(0.12+g*0.06);
+        const wave=Math.sin(tt*6+g*1.2)*0.12;
+        ctx.strokeStyle=gillCol; ctx.lineWidth=3.5;
+        ctx.beginPath(); ctx.moveTo(gx,gy+8); ctx.quadraticCurveTo(gx+ex*pw*0.08+wave*pw*0.15,gy-ph*0.12,gx+ex*pw*0.04,gy-ph*0.22); ctx.stroke();
+        // Gill fronds
+        ctx.fillStyle=gillCol; ctx.strokeStyle=INK; ctx.lineWidth=1.5;
+        ctx.beginPath(); ctx.ellipse(gx+ex*pw*0.04,gy-ph*0.22,4,7,ex*0.5,0,Math.PI*2); ctx.fill(); ctx.stroke();
+      }
+    }
+    // Cute wide eyes
+    drawEye(hcx-pw*0.16,hcy-ph*0.04,6);
+    drawEye(hcx+pw*0.16,hcy-ph*0.04,6);
+    // Tiny smile
+    ctx.strokeStyle=INK; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(hcx,hcy+ph*0.08,pw*0.10,0.15,Math.PI-0.15); ctx.stroke();
+    // Little limbs
+    ctx.strokeStyle=body; ctx.lineWidth=6;
+    ctx.beginPath(); ctx.moveTo(px+pw*0.22,py+ph*0.85); ctx.lineTo(px+pw*0.10,py+ph+10); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(px+pw*0.72,py+ph*0.85); ctx.lineTo(px+pw*0.85,py+ph+10); ctx.stroke();
+    ctx.strokeStyle=INK; ctx.lineWidth=2.5;
+    ctx.beginPath(); ctx.moveTo(px+pw*0.22,py+ph*0.85); ctx.lineTo(px+pw*0.10,py+ph+10); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(px+pw*0.72,py+ph*0.85); ctx.lineTo(px+pw*0.85,py+ph+10); ctx.stroke();
+  }
+
+  const CHAR_DRAW = { frog:drawFrog, dog:drawDog, cat:drawCat, monkey:drawMonkey, capybara:drawCapybara, hippo:drawHippo, elephant:drawElephant, puffin:drawPuffin, axolotl:drawAxolotl };
+
+  // ── Player draw ───────────────────────────────────────────────────────────────
+  function drawPlayer(now) {
+    const ck=save.character, skin=activeSkin(ck);
+    const stretch=player.ducking?0:clamp(Math.abs(player.vy)/1200,0,1);
+    let sx,sy;
+    if (player.ducking)  { sx=1.30; sy=DUCK_H_RATIO; }
+    else if (!player.on) { sx=1-0.10*stretch; sy=1+0.20*stretch; }
+    else { const bob=Math.sin(player.tt*18)*0.02; sx=1+bob; sy=1-bob; }
+
+    const pw=player.w*sx, ph=player.h*sy;
+    const px=player.x+(player.w-pw)/2;
+    const py=(player.y+player.h)-ph;
+
+    // Shield bubble
+    if (player.shieldT>0) {
+      ctx.save(); ctx.globalAlpha=0.35; ctx.fillStyle="#78beff";
+      ctx.beginPath(); ctx.ellipse(player.x+player.w/2,player.y+player.h/2,player.w*0.82,player.h*0.82,0,0,Math.PI*2); ctx.fill(); ctx.restore();
+      ctx.strokeStyle="#3c78dc"; ctx.lineWidth=3;
+      ctx.beginPath(); ctx.ellipse(player.x+player.w/2,player.y+player.h/2,player.w*0.82,player.h*0.82,0,0,Math.PI*2); ctx.stroke();
+    }
+    // Shadow
+    ctx.fillStyle="rgba(0,0,0,0.12)";
+    ctx.beginPath(); ctx.ellipse(player.x+player.w/2,GROUND_Y+14,player.w*0.70,7,0,0,Math.PI*2); ctx.fill();
+
+    CHAR_DRAW[ck]?.(px,py,pw,ph,skin.body,skin.belly,player.tt,player.ducking,now);
+
+    // Magnet pip
+    if (player.magnetT>0) {
+      ctx.fillStyle="#ff5a5a"; ctx.strokeStyle=INK; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.arc(px+pw*0.18,py+ph*0.10,7,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    }
+    // Charge bar
+    if (player.charging&&player.chargeT>0) {
+      const ratio=clamp(player.chargeT/CHARGE_TIME,0,1);
+      const bx=px-4, by=py-18, bw=pw+8, bh=8;
+      ctx.fillStyle="rgba(0,0,0,0.18)"; drawRoundRect(bx,by,bw,bh,4); ctx.fill();
+      ctx.fillStyle=`hsl(${Math.round(110-ratio*80)},90%,48%)`; drawRoundRect(bx,by,bw*ratio,bh,4); ctx.fill();
+      ctx.strokeStyle=INK; ctx.lineWidth=1.5; drawRoundRect(bx,by,bw,bh,4); ctx.stroke();
+    }
+  }
+
+  // ── Main draw ─────────────────────────────────────────────────────────────────
+  function draw(now) {
+    if (state==="shop") { drawShop(); return; }
+
+    drawSky(); clouds.forEach(drawCloud);
+
+    ctx.fillStyle=GROUND_COL; ctx.fillRect(0,GROUND_Y,W,H-GROUND_Y);
+    ctx.fillStyle=GROUND_DARK; ctx.fillRect(0,GROUND_Y,W,8);
+    const dotOff=(dist*0.6)%40;
+    ctx.fillStyle="#5acb66";
+    for (let x=-40;x<W+40;x+=40) { ctx.beginPath(); ctx.arc(x-dotOff,GROUND_Y+40,4,0,Math.PI*2); ctx.fill(); }
+
+    // Coins
+    for (const c of coinList) {
+      const alpha=c.got?Math.max(0,1-c.popT/COIN_POP_DUR):1;
+      if (alpha<=0) continue;
+      const scale=c.got?1+c.popT/COIN_POP_DUR*0.6:1;
+      const spin=0.35+0.65*Math.abs(Math.sin((now/1000)*8+c.x*0.01));
+      ctx.save(); ctx.globalAlpha=alpha; ctx.translate(c.x,c.y); ctx.scale(scale,scale);
+      ctx.fillStyle="#ffdc5a"; ctx.strokeStyle=INK; ctx.lineWidth=3;
+      ctx.beginPath(); ctx.ellipse(0,0,c.r*spin,c.r,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0,-c.r+4); ctx.lineTo(0,c.r-4); ctx.stroke();
+      ctx.restore();
+    }
+
+    // Power orbs
+    const orbColors={shield:"#78beff",magnet:"#ff5a5a",double:"#af78ff"};
+    for (const o of orbList) {
+      if (o.got) continue;
+      const c=orbColors[o.kind];
+      ctx.save(); ctx.globalAlpha=0.35; ctx.fillStyle=c; ctx.beginPath(); ctx.arc(o.x,o.y,o.r*2,0,Math.PI*2); ctx.fill(); ctx.restore();
+      ctx.fillStyle=c; ctx.strokeStyle=INK; ctx.lineWidth=3;
+      ctx.beginPath(); ctx.arc(o.x,o.y,o.r,0,Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle="white";
+      if (o.kind==="shield")      { ctx.beginPath(); ctx.arc(o.x,o.y,6,0,Math.PI*2); ctx.fill(); }
+      else if (o.kind==="magnet") { drawRoundRect(o.x-6,o.y-6,12,12,3); ctx.fill(); }
+      else { ctx.beginPath(); ctx.moveTo(o.x-6,o.y+5); ctx.lineTo(o.x,o.y-7); ctx.lineTo(o.x+6,o.y+5); ctx.closePath(); ctx.fill(); }
+    }
+
+    // Obstacles
+    for (const o of obstacles) {
+      ctx.strokeStyle=INK; ctx.lineWidth=3;
+      if (o.kind==="snake") {
+        const cx=o.x+o.w/2, cy=o.y+o.h/2, r=o.w*0.42;
+        ctx.fillStyle="#4ec44e";
+        ctx.beginPath(); ctx.ellipse(cx,cy+o.h*0.10,r,o.h*0.28,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+        ctx.beginPath(); ctx.ellipse(cx,cy-o.h*0.16,r*0.78,o.h*0.22,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+        ctx.fillStyle="#a8f5a8"; ctx.beginPath(); ctx.ellipse(cx,cy+o.h*0.10,r*0.55,o.h*0.16,0,0,Math.PI*2); ctx.fill();
+        const hx=cx+r*0.45, hy=o.y+o.h*0.08;
+        ctx.fillStyle="#4ec44e"; ctx.strokeStyle=INK; ctx.lineWidth=3;
+        ctx.beginPath(); ctx.ellipse(hx,hy,o.w*0.20,o.h*0.22,-0.3,0,Math.PI*2); ctx.fill(); ctx.stroke();
+        ctx.strokeStyle="#ff4455"; ctx.lineWidth=2;
+        ctx.beginPath(); ctx.moveTo(hx+o.w*0.17,hy-2); ctx.lineTo(hx+o.w*0.26,hy-6); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(hx+o.w*0.17,hy-2); ctx.lineTo(hx+o.w*0.26,hy+2); ctx.stroke();
+        ctx.fillStyle="white"; ctx.beginPath(); ctx.arc(hx+o.w*0.08,hy-o.h*0.08,5,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle=INK;     ctx.beginPath(); ctx.arc(hx+o.w*0.09,hy-o.h*0.08,2.5,0,Math.PI*2); ctx.fill();
+      } else {
+        const wb=Math.sin((now/1000)*7+o.phase)*18;
+        const cx=o.x+o.w/2, cy=o.y+o.h/2, ws=o.w*0.75;
+        ctx.save(); ctx.setLineDash([10,8]);
+        ctx.strokeStyle="rgba(80,180,255,0.45)"; ctx.lineWidth=2;
+        ctx.beginPath(); ctx.moveTo(o.x-10,BIRD_GAP_BOTTOM); ctx.lineTo(o.x+o.w+10,BIRD_GAP_BOTTOM); ctx.stroke();
+        ctx.setLineDash([]); ctx.restore();
+        ctx.fillStyle="#ffbe46"; ctx.strokeStyle=INK; ctx.lineWidth=3;
+        for (const ex of [-1,1]) {
+          ctx.beginPath(); ctx.moveTo(cx,cy);
+          ctx.quadraticCurveTo(cx+ex*ws*0.6,cy-28+wb,cx+ex*ws,cy+wb);
+          ctx.quadraticCurveTo(cx+ex*ws*0.5,cy+10+wb*0.3,cx,cy);
+          ctx.fill(); ctx.stroke();
+        }
+        ctx.fillStyle="#ff7a3c"; ctx.beginPath(); ctx.ellipse(cx,cy,o.w*0.32,o.h*0.44,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+        ctx.fillStyle="#ffd5a0"; ctx.beginPath(); ctx.ellipse(cx,cy+o.h*0.10,o.w*0.18,o.h*0.26,0,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle="#ffbe46"; ctx.beginPath(); ctx.moveTo(cx+o.w*0.28,cy-4); ctx.lineTo(cx+o.w*0.44,cy); ctx.lineTo(cx+o.w*0.28,cy+6); ctx.closePath(); ctx.fill(); ctx.stroke();
+        drawEye(cx+o.w*0.14,cy-o.h*0.12,6);
+        ctx.strokeStyle=INK; ctx.lineWidth=2.5;
+        for (const fx of [cx-o.w*0.10,cx+o.w*0.10]) {
+          ctx.beginPath(); ctx.moveTo(fx,cy+o.h*0.44); ctx.lineTo(fx,cy+o.h*0.44+14); ctx.stroke();
+          for (const dx of [-8,0,8]) { ctx.beginPath(); ctx.moveTo(fx,cy+o.h*0.44+14); ctx.lineTo(fx+dx,cy+o.h*0.44+22); ctx.stroke(); }
+        }
+      }
+    }
+
+    drawPlayer(now);
+
+    if (state==="start") {
+      drawCenteredPanel(`${CHARACTERS[save.character].label} Runner`,
+        "Hold Space/↑ = charge jump  •  Hold ↓/S = duck",
+        "Jump over snakes  •  Duck under birds  •  S = Shop");
+    }
+    if (state==="over") {
+      drawCenteredPanel("GAME OVER",
+        `Score: ${score}  •  Best: ${save.best}  •  Coins: ${coinsRun}`,
+        "Space/R to restart  •  S = Shop");
+    }
+  }
+
+  // ── Update loop ───────────────────────────────────────────────────────────────
+  let last=performance.now();
+  function loop(now) {
+    const dt=Math.min(0.033,(now-last)/1000); last=now;
+    for (const cl of clouds) { cl.x-=cl.v*dt; if (cl.x<-260) Object.assign(cl,randomCloud()); }
+
+    if (state==="play") {
+      runTime+=dt; player.tt+=dt;
+      player.shieldT=Math.max(0,player.shieldT-dt);
+      player.magnetT=Math.max(0,player.magnetT-dt);
+      player.doubleT=Math.max(0,player.doubleT-dt);
+      if (player.doubleT===0) player.doubleUsed=false;
+      player.coyoteT=Math.max(0,player.coyoteT-dt);
+
+      if (player.charging&&player.on) player.chargeT=Math.min(CHARGE_TIME,player.chargeT+dt);
+      if (player.charging&&!player.on&&player.coyoteT<=0) jumpReleased();
+
+      speed=speedForTime(runTime); dist+=speed*dt; score=Math.floor(dist/12);
+
+      const baseG=assist?GRAVITY_ASS:GRAVITY_NORM;
+      const gm=(player.jumpHeld&&!player.charging&&player.vy<0)?JUMP_HOLD_GRAV_MULT:1.0;
+      player.vy+=baseG*gm*dt; player.y+=player.vy*dt;
+
+      if (player.y+player.h>=GROUND_Y) { player.y=GROUND_Y-player.h; player.vy=0; player.on=true; }
+      else player.on=false;
+      if (player.on) { player.coyoteT=COYOTE_TIME; player.doubleUsed=false; }
+      if (!player.on) player.ducking=false;
+
+      if (assist&&!assistShieldGiven&&runTime>=ASSIST_SHIELD_TIME&&player.shieldT<=0) {
+        orbList.push({x:W+260,y:Math.max(120,GROUND_Y-150),r:14,kind:"shield",got:false});
+        assistShieldGiven=true;
+      }
+
+      if (nextSpawn<W+60) spawnPack();
+      nextSpawn-=speed*dt;
+      for (const o of obstacles) o.x-=speed*dt;
+      for (const c of coinList)  c.x-=speed*dt;
+      for (const o of orbList)   o.x-=speed*dt;
+      for (const c of coinList) if (c.got) c.popT+=dt;
+      obstacles=obstacles.filter(o=>o.x+o.w>-20);
+      coinList =coinList.filter(c=>c.x+c.r>-20&&(!c.got||c.popT<COIN_POP_DUR));
+      orbList  =orbList.filter(o=>o.x+o.r>-20&&!o.got);
+
+      if (player.magnetT>0) {
+        const mx=player.x+player.w/2, my=player.y+player.h/2;
+        for (const c of coinList) {
+          if (c.got) continue;
+          const dx=mx-c.x, dy=my-c.y;
+          if (Math.hypot(dx,dy)<170) { c.x+=dx*dt*3.3; c.y+=dy*dt*3.3; }
+        }
+      }
+
+      const pr={
+        x:player.x,
+        y:player.ducking?player.y+player.h*(1-DUCK_H_RATIO):player.y,
+        w:player.w,
+        h:player.ducking?player.h*DUCK_H_RATIO:player.h,
+      };
+
+      for (const c of coinList) {
+        if (c.got) continue;
+        if (rects(pr,{x:c.x-c.r,y:c.y-c.r,w:c.r*2,h:c.r*2})) {
+          c.got=true; coinsRun++; save.wallet++; persist(); beep(880,0.05,0.05);
+        }
+      }
+      for (const o of orbList) {
+        if (o.got) continue;
+        if (rects(pr,{x:o.x-o.r,y:o.y-o.r,w:o.r*2,h:o.r*2})) {
+          o.got=true;
+          if (o.kind==="shield") player.shieldT=POWER_DUR.shield;
+          if (o.kind==="magnet") player.magnetT=POWER_DUR.magnet;
+          if (o.kind==="double") player.doubleT=POWER_DUR.double;
+          beep(660,0.05,0.05); beep(880,0.05,0.05);
+        }
+      }
+
+      let shieldBroken=false, dead=false;
+      for (const o of obstacles) {
+        if (!rects(pr,o)) continue;
+        if (player.shieldT>0&&!shieldBroken) { player.shieldT=0; shieldBroken=true; beep(220,0.07,0.06); }
+        else { dead=true; beep(120,0.12,0.08); break; }
+      }
+      if (dead) { save.best=Math.max(save.best,score); persist(); state="over"; stopMusic(); playMusic("start"); }
+    }
+
+    // HUD
+    hudScore.textContent  = `Score: ${score}`;
+    hudCoins.textContent  = `Coins: ${coinsRun}`;
+    hudWallet.textContent = `Wallet: ${save.wallet}`;
+    hudChar.textContent   = `${CHARACTERS[save.character].label} · ${activeSkin(save.character).label}`;
+    const powers=[];
+    if (player.shieldT>0) powers.push(`Shield ${player.shieldT.toFixed(1)}s`);
+    if (player.magnetT>0) powers.push(`Magnet ${player.magnetT.toFixed(1)}s`);
+    if (player.doubleT>0) powers.push(`Double ${player.doubleT.toFixed(1)}s`);
+    hudPowers.textContent=`Powers: ${powers.length?powers.join(" • "):"none"}`;
+
+    draw(now);
+    requestAnimationFrame(loop);
+  }
+  // Kick off the loop
+  requestAnimationFrame(loop);
+
+})();
+</script>
+</body>
+</html>
