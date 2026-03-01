@@ -2,31 +2,53 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover" />
   <title>Cartoon Animal Runner</title>
   <style>
-    html, body { margin:0; height:100%; background:#bfe9ff; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; }
-    .wrap { height:100%; display:flex; align-items:center; justify-content:center; padding:14px; box-sizing:border-box; }
-    canvas { width:min(960px,100%); height:auto; aspect-ratio:960/540; border:2px solid #232323; border-radius:18px; background:transparent; touch-action:none; }
+    *, *::before, *::after { box-sizing:border-box; }
+    html, body { margin:0; height:100%; background:#bfe9ff; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      /* iOS safe-area support */
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    }
+    .wrap {
+      /* In landscape on small screens the canvas should shrink to fit without the controls overlapping */
+      height:100dvh; display:flex; align-items:center; justify-content:center;
+      padding:4px 8px 80px 8px; /* leave room for controls at bottom */
+    }
+    canvas {
+      width:min(960px,100%);
+      /* In landscape phones height is the constraint — limit to 60dvh so controls stay visible */
+      max-height:60dvh;
+      height:auto; aspect-ratio:960/540;
+      border:2px solid #232323; border-radius:12px; background:transparent; touch-action:none;
+    }
     .hud {
-      position:fixed; top:12px; left:12px; right:12px;
-      display:flex; gap:10px; align-items:center; justify-content:space-between;
-      color:#232323; font-size:14px; pointer-events:none;
+      position:fixed; top:max(4px,env(safe-area-inset-top)); left:8px; right:8px;
+      display:flex; gap:6px; align-items:center; justify-content:space-between;
+      color:#232323; font-size:12px; pointer-events:none; flex-wrap:wrap;
     }
-    .hud .left, .hud .right { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
-    .pill { background:rgba(255,255,255,0.75); border:1px solid rgba(35,35,35,0.25); border-radius:999px; padding:6px 10px; }
+    .hud .left, .hud .right { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+    .pill { background:rgba(255,255,255,0.75); border:1px solid rgba(35,35,35,0.25); border-radius:999px; padding:4px 8px; }
     .controls {
-      position:fixed; left:12px; right:12px; bottom:12px;
-      display:flex; gap:10px; justify-content:space-between; align-items:flex-end;
+      position:fixed; left:8px; right:8px;
+      bottom:max(8px, env(safe-area-inset-bottom));
+      display:flex; gap:8px; justify-content:space-between; align-items:flex-end; flex-wrap:wrap;
     }
-    .cluster { display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; }
+    .cluster { display:flex; gap:6px; align-items:flex-end; flex-wrap:wrap; }
     button {
       appearance:none; border:2px solid #232323; background:rgba(255,255,255,0.85);
-      border-radius:16px; padding:12px 14px; font-size:14px; font-weight:700;
-      box-shadow:0 8px 0 rgba(35,35,35,0.12); cursor:pointer;
+      border-radius:14px; padding:9px 11px; font-size:13px; font-weight:700;
+      box-shadow:0 6px 0 rgba(35,35,35,0.12); cursor:pointer; line-height:1.2;
     }
-    button:active { transform:translateY(2px); box-shadow:0 6px 0 rgba(35,35,35,0.12); }
-    .btn-wide { padding:14px 18px; font-size:16px; }
+    button:active { transform:translateY(2px); box-shadow:0 4px 0 rgba(35,35,35,0.12); }
+    .btn-wide { padding:11px 14px; font-size:15px; }
+    @media (max-height: 500px) {
+      /* Landscape phone — hide hint text, shrink buttons further */
+      .hud .right .pill:last-child { display:none; }
+      button { padding:7px 9px; font-size:12px; }
+      .btn-wide { padding:9px 12px; font-size:13px; }
+      .wrap { padding-bottom:64px; }
+    }
     .btn-red    { background:rgba(255,220,220,0.9); }
     .btn-blue   { background:rgba(215,235,255,0.9); }
     .btn-purple { background:rgba(235,220,255,0.9); }
@@ -47,7 +69,7 @@
       <div class="pill" id="hudChar">Frog</div>
       <div class="pill" id="hudAssist">Assist: ON</div>
       <div class="pill" id="hudAudio">Audio: Muted</div>
-      <div class="pill small">Hold Space/↑=jump • Hold ↓/S=duck • R restart • M audio • A assist • 1/2/3 powers</div>
+      <div class="pill small">Tap=jump • Double-tap=quick jump • Hold=high jump • Hold ↓/S=duck • M audio • A assist</div>
     </div>
   </div>
 
@@ -62,6 +84,9 @@
       <button class="btn-green" id="btnShop">SHOP (S)</button>
       <button class="btn-green" id="btnAssist">ASSIST: ON (A)</button>
       <button class="btn-dark"  id="btnAudio">AUDIO (M)</button>
+      <input type="range" id="volSlider" min="0" max="1" step="0.05" value="0"
+        style="width:80px;accent-color:#232323;cursor:pointer;vertical-align:middle;margin-left:4px;"
+        title="Music volume">
     </div>
     <div class="cluster">
       <button class="btn-blue"   id="btnShield">Shield (1)<div class="small">10 coins</div></button>
@@ -120,8 +145,8 @@
   const JUMP_HOLD_GRAV_MULT = 0.48;
 
   const DUCK_H_RATIO    = 0.45;
-  const BIRD_FLY_Y      = 290;
-  const BIRD_GAP_BOTTOM = 410;
+  const BIRD_FLY_Y      = 330;   // lowered: standing player gets hit, ducking clears
+  const BIRD_GAP_BOTTOM = 400;
   const COIN_POP_DUR    = 0.25;
 
   const POWER_COST = { shield:10, magnet:12, double:12 };
@@ -216,18 +241,25 @@
   let musicGain = null;   // master gain node for all music
   let musicNodes = [];    // active oscillator/gain nodes to stop on track change
   let musicTrack = null;  // "start" | "play" | null
+  let musicVolume = 0.35; // 0‥1, user-adjustable
 
   function ensureAudio() {
     if (audioCtx) return;
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    // Master music bus — quieter than SFX
     musicGain = audioCtx.createGain();
-    musicGain.gain.value = muted ? 0 : 0.18;
+    musicGain.gain.value = muted ? 0 : musicVolume * 0.5;
     musicGain.connect(audioCtx.destination);
+  }
+
+  // Mobile-safe audio unlock — call on EVERY user gesture
+  function unlockAudio() {
+    if (!audioCtx) return;
+    if (audioCtx.state === "suspended") audioCtx.resume();
   }
 
   function beep(freq=440, dur=0.06, gain=0.05) {
     if (muted || !audioCtx) return;
+    unlockAudio();
     const o = audioCtx.createOscillator(), g = audioCtx.createGain();
     o.type="square"; o.frequency.value=freq; g.gain.value=gain;
     o.connect(g); g.connect(audioCtx.destination);
@@ -343,23 +375,41 @@
     if (track === "start") startLooper(TITLE_MELODY, TITLE_BASS);
   }
 
+  function applyMusicVolume() {
+    if (musicGain) musicGain.gain.value = muted ? 0 : musicVolume * 0.5;
+  }
+
   function setMuted(v) {
     muted = v;
     if (!muted) {
       ensureAudio();
+      // Resume is critical on iOS — must be called directly inside a user gesture
       audioCtx.resume().then(() => {
-        if (musicGain) musicGain.gain.value = 0.18;
-        // Restart music for current game state
+        applyMusicVolume();
         const track = (state === "play") ? "play" : "start";
+        // Force restart so iOS actually plays
+        musicTrack = null;
         playMusic(track);
         beep(330, 0.05, 0.05);
-        beep(440, 0.05, 0.05);
+        setTimeout(() => beep(440, 0.05, 0.05), 60);
       });
     } else {
-      if (musicGain) musicGain.gain.value = 0;
+      applyMusicVolume();
       stopMusic();
     }
     hudAudio.textContent = `Audio: ${muted ? "Muted" : "On"}`;
+    updateVolSlider();
+  }
+
+  function setMusicVolume(v) {
+    musicVolume = Math.max(0, Math.min(1, v));
+    applyMusicVolume();
+    updateVolSlider();
+  }
+
+  function updateVolSlider() {
+    const sl = document.getElementById("volSlider");
+    if (sl) sl.value = muted ? 0 : musicVolume;
   }
 
   // ── Assist ────────────────────────────────────────────────────────────────────
@@ -382,6 +432,7 @@
     shieldT:0, magnetT:0, doubleT:0, doubleUsed:false,
     coyoteT:0, chargeT:0, charging:false, jumpHeld:false, ducking:false,
   };
+  let duckHeld = false; // tracks whether duck input is physically held
 
   const clouds = Array.from({length:7}, () => randomCloud(true));
   function randomCloud(init=false) {
@@ -404,7 +455,7 @@
     player.shieldT=0; player.magnetT=0; player.doubleT=0;
     player.doubleUsed=false; player.coyoteT=0;
     player.chargeT=0; player.charging=false; player.jumpHeld=false; player.ducking=false;
-    assistShieldGiven=false;
+    assistShieldGiven=false; duckHeld=false;
     playMusic("play"); // switch to run track
   }
 
@@ -448,25 +499,43 @@
   }
 
   // ── Jump / Duck ───────────────────────────────────────────────────────────────
+  let lastTapTime = 0;
+  const DOUBLE_TAP_MS = 300;
+
   function jumpPressed() {
     if (state!=="play") return;
-    player.jumpHeld=true;
-    if (player.on||player.coyoteT>0) { player.charging=true; player.chargeT=0; }
-    else if (player.doubleT>0&&!player.doubleUsed) {
-      player.doubleUsed=true;
-      player.vy=-Math.floor((assist?JUMP_V_ASS:JUMP_V_NORM)*0.92);
-      beep(620,0.05,0.05);
+    const now = performance.now();
+    const isDoubleTap = (now - lastTapTime) < DOUBLE_TAP_MS;
+    lastTapTime = now;
+
+    player.jumpHeld = true;
+
+    // Double-tap while on ground = instant quick jump (no charge)
+    if (isDoubleTap && (player.on || player.coyoteT > 0)) {
+      player.charging = false; player.chargeT = 0;
+      const jumpV = assist ? JUMP_V_ASS : JUMP_V_NORM;
+      player.vy = -Math.floor(jumpV * 0.78); // quick mid-height jump
+      player.on = false; player.coyoteT = 0;
+      beep(520, 0.05, 0.05);
+      return;
+    }
+
+    if (player.on || player.coyoteT > 0) { player.charging = true; player.chargeT = 0; }
+    else if (player.doubleT > 0 && !player.doubleUsed) {
+      player.doubleUsed = true;
+      player.vy = -Math.floor((assist ? JUMP_V_ASS : JUMP_V_NORM) * 0.92);
+      beep(620, 0.05, 0.05);
     }
   }
   function jumpReleased() {
-    player.jumpHeld=false;
+    player.jumpHeld = false;
     if (player.charging) {
-      player.charging=false;
-      const jumpV=assist?JUMP_V_ASS:JUMP_V_NORM;
-      const ratio=clamp(player.chargeT/CHARGE_TIME,0,1);
-      player.vy=-Math.floor(jumpV*(JUMP_MIN_RATIO+(JUMP_MAX_RATIO-JUMP_MIN_RATIO)*ratio));
-      player.on=false; player.coyoteT=0; player.chargeT=0;
-      beep(380+ratio*260,0.06,0.05);
+      player.charging = false;
+      const jumpV = assist ? JUMP_V_ASS : JUMP_V_NORM;
+      const ratio = clamp(player.chargeT / CHARGE_TIME, 0, 1);
+      player.vy = -Math.floor(jumpV * (JUMP_MIN_RATIO + (JUMP_MAX_RATIO - JUMP_MIN_RATIO) * ratio));
+      player.on = false; player.coyoteT = 0; player.chargeT = 0;
+      beep(380 + ratio * 260, 0.06, 0.05);
     }
   }
 
@@ -506,7 +575,7 @@
 
   // ── Input ─────────────────────────────────────────────────────────────────────
   window.addEventListener("keydown", e => {
-    ensureAudio();
+    ensureAudio(); unlockAudio();
     const code=e.code;
     if (code==="Space"||code==="ArrowUp") {
       if (state==="start"||state==="over") { state="play"; resetRun(); }
@@ -516,8 +585,8 @@
     if (code==="KeyR"&&state!=="play") { state="play"; resetRun(); }
     if (code==="KeyM") setMuted(!muted);
     if (code==="KeyS"&&state!=="play") { state=(state==="shop")?"start":"shop"; if (state==="start"||state==="shop") playMusic("start"); }
-    if (code==="KeyS"&&state==="play") { player.ducking=true; e.preventDefault(); }
-    if (code==="ArrowDown"&&state==="play") { player.ducking=true; e.preventDefault(); }
+    if (code==="KeyS"&&state==="play") { player.ducking=true; duckHeld=true; e.preventDefault(); }
+    if (code==="ArrowDown"&&state==="play") { player.ducking=true; duckHeld=true; e.preventDefault(); }
     if (code==="KeyA") setAssist(!assist);
     if (code==="Digit1") buyPower("shield");
     if (code==="Digit2") buyPower("magnet");
@@ -548,12 +617,12 @@
 
   window.addEventListener("keyup", e => {
     if (e.code==="Space"||e.code==="ArrowUp") jumpReleased();
-    if (e.code==="ArrowDown"||e.code==="KeyS") player.ducking=false;
+    if (e.code==="ArrowDown"||e.code==="KeyS") { player.ducking=false; duckHeld=false; }
   });
 
   const activePointers=new Set();
   function onPointerDown(e) {
-    ensureAudio();
+    ensureAudio(); unlockAudio();
     if (state==="shop") return;
     if (state==="start"||state==="over") { state="play"; resetRun(); }
     if (!activePointers.has(e.pointerId)) { activePointers.add(e.pointerId); jumpPressed(); }
@@ -565,7 +634,7 @@
   canvas.addEventListener("pointercancel",onPointerUp);
 
   document.getElementById("btnJump").addEventListener("pointerdown", e => {
-    ensureAudio();
+    ensureAudio(); unlockAudio();
     if (state==="start"||state==="over") { state="play"; resetRun(); }
     if (!activePointers.has("btn")) { activePointers.add("btn"); jumpPressed(); }
     e.preventDefault();
@@ -574,14 +643,20 @@
   document.getElementById("btnJump").addEventListener("pointercancel", ()=>{ activePointers.delete("btn"); jumpReleased(); });
 
   const btnDuck=document.getElementById("btnDuck");
-  btnDuck.addEventListener("pointerdown",  e=>{ player.ducking=true; e.preventDefault(); });
-  btnDuck.addEventListener("pointerup",    ()=>{ player.ducking=false; });
-  btnDuck.addEventListener("pointercancel",()=>{ player.ducking=false; });
-  btnDuck.addEventListener("mouseleave",   ()=>{ player.ducking=false; });
+  btnDuck.addEventListener("pointerdown",  e=>{ player.ducking=true; duckHeld=true; e.preventDefault(); });
+  btnDuck.addEventListener("pointerup",    ()=>{ player.ducking=false; duckHeld=false; });
+  btnDuck.addEventListener("pointercancel",()=>{ player.ducking=false; duckHeld=false; });
+  btnDuck.addEventListener("mouseleave",   ()=>{ player.ducking=false; duckHeld=false; });
 
   document.getElementById("btnShop").addEventListener("click", ()=>{ state=(state==="shop"?"start":"shop"); playMusic("start"); });
   btnAssist.addEventListener("click", ()=>setAssist(!assist));
   btnAudio.addEventListener("click",  ()=>setMuted(!muted));
+  const volSlider = document.getElementById("volSlider");
+  volSlider.addEventListener("input", e => {
+    const v = parseFloat(e.target.value);
+    if (v === 0) { if (!muted) setMuted(true); }
+    else { if (muted) setMuted(false); else setMusicVolume(v); }
+  });
   document.getElementById("btnShield").addEventListener("click", ()=>buyPower("shield"));
   document.getElementById("btnMagnet").addEventListener("click", ()=>buyPower("magnet"));
   document.getElementById("btnDouble").addEventListener("click", ()=>buyPower("double"));
@@ -1488,6 +1563,8 @@
       else player.on=false;
       if (player.on) { player.coyoteT=COYOTE_TIME; player.doubleUsed=false; }
       if (!player.on) player.ducking=false;
+      // Fix duck-stuck: if duck key is no longer held, always clear ducking on ground
+      if (player.on && !duckHeld) player.ducking=false;
 
       if (assist&&!assistShieldGiven&&runTime>=ASSIST_SHIELD_TIME&&player.shieldT<=0) {
         orbList.push({x:W+260,y:Math.max(120,GROUND_Y-150),r:14,kind:"shield",got:false});
@@ -1537,11 +1614,17 @@
         }
       }
 
-      let shieldBroken=false, dead=false;
+      let dead=false;
       for (const o of obstacles) {
         if (!rects(pr,o)) continue;
-        if (player.shieldT>0&&!shieldBroken) { player.shieldT=0; shieldBroken=true; beep(220,0.07,0.06); }
-        else { dead=true; beep(120,0.12,0.08); break; }
+        if (player.shieldT > 0) {
+          // Shield absorbs the hit — knock obstacle back so it can't immediately re-collide
+          player.shieldT = 0;
+          o.x -= player.w + 20; // push past the player
+          beep(220, 0.05, 0.06); beep(440, 0.05, 0.04);
+          break;
+        }
+        dead = true; beep(120, 0.12, 0.08); break;
       }
       if (dead) { save.best=Math.max(save.best,score); persist(); state="over"; stopMusic(); playMusic("start"); }
     }
