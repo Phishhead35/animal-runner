@@ -199,6 +199,21 @@
                         leucistic:{ label:"Leucistic",      cost:25, body:"#f8eedd", belly:"#ffffff" },
                         golden:   { label:"Golden",         cost:25, body:"#f0c840", belly:"#fff0a0" },
                         wild:     { label:"Wild Type",      cost:40, body:"#556644", belly:"#aabb88" } } },
+    pig:      { label:"Pig 🐷",       emoji:"🐷", cost:100,
+                skins:{ pink:   { label:"Pink (default)",  cost:0,  body:"#f0a0b0", belly:"#ffd0dc" },
+                        peach:  { label:"Peach",           cost:25, body:"#e8b890", belly:"#f8dcc0" },
+                        spotted:{ label:"Spotted",         cost:25, body:"#e88898", belly:"#ffc8d0" },
+                        black:  { label:"Black",           cost:40, body:"#333344", belly:"#665566" } } },
+    moose:    { label:"Moose 🫎",     emoji:"🫎", cost:110,
+                skins:{ brown:  { label:"Brown (default)", cost:0,  body:"#7a5030", belly:"#c09060" },
+                        dark:   { label:"Dark",            cost:25, body:"#3a2010", belly:"#7a5030" },
+                        tan:    { label:"Tan",             cost:25, body:"#b08050", belly:"#e0c090" },
+                        white:  { label:"White",           cost:40, body:"#e8e0d0", belly:"#ffffff" } } },
+    bear:     { label:"Bear 🐻",      emoji:"🐻", cost:120,
+                skins:{ brown:  { label:"Brown (default)", cost:0,  body:"#8b5e3c", belly:"#d4a878" },
+                        black:  { label:"Black",           cost:25, body:"#222222", belly:"#554444" },
+                        grizzly:{ label:"Grizzly",         cost:25, body:"#b07840", belly:"#e0b870" },
+                        polar:  { label:"Polar",           cost:40, body:"#f0f0ee", belly:"#ffffff" } } },
   };
   const CHAR_KEYS = Object.keys(CHARACTERS);
 
@@ -870,7 +885,6 @@
       ctx.fillStyle=v; ctx.beginPath(); ctx.ellipse(0,12,9,7,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
       ctx.fillStyle=b; ctx.beginPath(); ctx.arc(-2,-16,13,0,Math.PI*2); ctx.fill(); ctx.stroke();
       ctx.fillStyle=v; ctx.beginPath(); ctx.ellipse(-2,-10,8,5,0,0,Math.PI*2); ctx.fill();
-      // Gills
       for (const ex of [-1,1]) {
         for (let g=0;g<3;g++) {
           ctx.strokeStyle=gc; ctx.lineWidth=2.5;
@@ -879,6 +893,53 @@
         }
       }
       drawEye(-7,-19,4); drawEye(5,-19,4);
+    } else if (ck==="pig") {
+      ctx.fillStyle=b; ctx.beginPath(); ctx.ellipse(0,8,16,13,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle=v; ctx.beginPath(); ctx.ellipse(0,12,9,6,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle=b; ctx.beginPath(); ctx.arc(-2,-17,12,0,Math.PI*2); ctx.fill(); ctx.stroke();
+      // Snout
+      ctx.fillStyle=v; ctx.beginPath(); ctx.ellipse(6,-11,7,5,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle="#cc7788"; ctx.beginPath(); ctx.arc(3,-11,2.5,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(9,-11,2.5,0,Math.PI*2); ctx.fill();
+      // Ears
+      for (const ex of [-1,1]) {
+        ctx.fillStyle=b; ctx.beginPath(); ctx.moveTo(ex*4,-26); ctx.lineTo(ex*14,-40); ctx.lineTo(ex*14,-22); ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.fillStyle=v; ctx.beginPath(); ctx.moveTo(ex*5,-27); ctx.lineTo(ex*12,-37); ctx.lineTo(ex*12,-24); ctx.closePath(); ctx.fill();
+      }
+      drawEye(-6,-19,4); drawEye(4,-19,4);
+    } else if (ck==="moose") {
+      ctx.fillStyle=b; drawRoundRect(-12,-10,24,26,5); ctx.fill(); ctx.stroke();
+      ctx.fillStyle=v; ctx.beginPath(); ctx.ellipse(0,8,7,5,0,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle=b; ctx.beginPath(); ctx.ellipse(-2,-20,10,8,0.15,0,Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle=v; ctx.beginPath(); ctx.ellipse(5,-18,5,3.5,0.2,0,Math.PI*2); ctx.fill();
+      // Antlers
+      ctx.strokeStyle=b; ctx.lineWidth=4;
+      for (const ex of [-1,1]) {
+        ctx.beginPath(); ctx.moveTo(ex*5,-26); ctx.lineTo(ex*8,-40); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(ex*7,-34); ctx.lineTo(ex*14,-36); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(ex*8,-40); ctx.lineTo(ex*14,-38); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(ex*8,-40); ctx.lineTo(ex*12,-46); ctx.stroke();
+      }
+      ctx.strokeStyle=INK; ctx.lineWidth=2;
+      for (const ex of [-1,1]) {
+        ctx.beginPath(); ctx.moveTo(ex*5,-26); ctx.lineTo(ex*8,-40); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(ex*7,-34); ctx.lineTo(ex*14,-36); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(ex*8,-40); ctx.lineTo(ex*14,-38); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(ex*8,-40); ctx.lineTo(ex*12,-46); ctx.stroke();
+      }
+      drawEye(3,-22,4);
+      for (const ex of [-1,1]) { ctx.fillStyle=b; ctx.beginPath(); ctx.arc(ex*12,-22,4,0,Math.PI*2); ctx.fill(); ctx.stroke(); ctx.fillStyle=v; ctx.beginPath(); ctx.arc(ex*12,-22,2.5,0,Math.PI*2); ctx.fill(); }
+    } else if (ck==="bear") {
+      ctx.fillStyle=b; ctx.beginPath(); ctx.ellipse(0,8,17,14,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle=v; ctx.beginPath(); ctx.ellipse(0,12,9,7,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle=b; ctx.beginPath(); ctx.arc(-2,-17,13,0,Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle=v; ctx.beginPath(); ctx.ellipse(5,-11,7,5,0.1,0,Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle="#331111"; ctx.beginPath(); ctx.ellipse(7,-13,4,2.5,0,0,Math.PI*2); ctx.fill();
+      for (const ex of [-1,1]) {
+        ctx.fillStyle=b; ctx.beginPath(); ctx.arc(ex*13,-24,5,0,Math.PI*2); ctx.fill(); ctx.stroke();
+        ctx.fillStyle=v; ctx.beginPath(); ctx.arc(ex*13,-24,3,0,Math.PI*2); ctx.fill();
+      }
+      drawEye(-7,-20,5); drawEye(4,-20,5);
     }
     ctx.restore();
   }
@@ -1397,7 +1458,180 @@
     ctx.beginPath(); ctx.moveTo(px+pw*0.72,py+ph*0.85); ctx.lineTo(px+pw*0.85,py+ph+10); ctx.stroke();
   }
 
-  const CHAR_DRAW = { frog:drawFrog, dog:drawDog, cat:drawCat, monkey:drawMonkey, capybara:drawCapybara, hippo:drawHippo, elephant:drawElephant, puffin:drawPuffin, axolotl:drawAxolotl };
+
+  // ── Pig ───────────────────────────────────────────────────────────────────────
+  function drawPig(px,py,pw,ph,body,belly,tt,ducking,now) {
+    const cx=px+pw/2;
+    ctx.strokeStyle=INK; ctx.lineWidth=3;
+    // Chunky round body
+    ctx.fillStyle=body;
+    ctx.beginPath(); ctx.ellipse(cx,py+ph*0.65,pw*0.48,ph*0.36,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle=belly; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.ellipse(cx,py+ph*0.72,pw*0.28,ph*0.18,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    // Round head
+    const hcx=cx-pw*0.04, hcy=py+ph*0.20;
+    ctx.fillStyle=body; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.arc(hcx,hcy,pw*0.36,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    // Snout — big round disc
+    ctx.fillStyle=belly; ctx.strokeStyle=INK; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.ellipse(hcx+pw*0.14,hcy+ph*0.08,pw*0.18,ph*0.12,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    // Nostrils
+    ctx.fillStyle="#cc7788";
+    ctx.beginPath(); ctx.arc(hcx+pw*0.08,hcy+ph*0.09,3.5,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(hcx+pw*0.20,hcy+ph*0.09,3.5,0,Math.PI*2); ctx.fill();
+    // Perky ears
+    for (const ex of [-1,1]) {
+      ctx.fillStyle=body; ctx.strokeStyle=INK; ctx.lineWidth=2.5;
+      ctx.beginPath();
+      ctx.moveTo(hcx+ex*pw*0.22,hcy-ph*0.16);
+      ctx.lineTo(hcx+ex*pw*0.36,hcy-ph*0.42);
+      ctx.lineTo(hcx+ex*pw*0.42,hcy-ph*0.14);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle=belly; ctx.lineWidth=1;
+      ctx.beginPath();
+      ctx.moveTo(hcx+ex*pw*0.24,hcy-ph*0.17);
+      ctx.lineTo(hcx+ex*pw*0.34,hcy-ph*0.36);
+      ctx.lineTo(hcx+ex*pw*0.38,hcy-ph*0.17);
+      ctx.closePath(); ctx.fill();
+    }
+    drawEye(hcx-pw*0.12,hcy-ph*0.04,5);
+    drawEye(hcx+pw*0.12,hcy-ph*0.04,5);
+    // Curly tail (tight spiral)
+    const tc=Math.sin(tt*8)*0.2;
+    ctx.strokeStyle=body; ctx.lineWidth=5;
+    ctx.beginPath();
+    ctx.moveTo(px+pw*0.88,py+ph*0.55);
+    ctx.bezierCurveTo(px+pw+pw*0.20,py+ph*0.40,px+pw+pw*0.28,py+ph*0.28+tc*ph*0.15,px+pw+pw*0.18,py+ph*0.20);
+    ctx.stroke();
+    ctx.strokeStyle=INK; ctx.lineWidth=2.5;
+    ctx.beginPath();
+    ctx.moveTo(px+pw*0.88,py+ph*0.55);
+    ctx.bezierCurveTo(px+pw+pw*0.20,py+ph*0.40,px+pw+pw*0.28,py+ph*0.28+tc*ph*0.15,px+pw+pw*0.18,py+ph*0.20);
+    ctx.stroke();
+    // Inner curl
+    ctx.strokeStyle=body; ctx.lineWidth=3;
+    ctx.beginPath();
+    ctx.arc(px+pw+pw*0.20,py+ph*0.26,pw*0.08,0,Math.PI*1.7);
+    ctx.stroke();
+    ctx.strokeStyle=INK; ctx.lineWidth=1.5;
+    ctx.beginPath();
+    ctx.arc(px+pw+pw*0.20,py+ph*0.26,pw*0.08,0,Math.PI*1.7);
+    ctx.stroke();
+  }
+
+  // ── Moose ─────────────────────────────────────────────────────────────────────
+  function drawMoose(px,py,pw,ph,body,belly,tt,ducking,now) {
+    const cx=px+pw/2;
+    ctx.strokeStyle=INK; ctx.lineWidth=3;
+    // Tall lanky body
+    ctx.fillStyle=body; drawRoundRect(px+pw*0.08,py+ph*0.28,pw*0.84,ph*0.72,10); ctx.fill(); ctx.stroke();
+    ctx.fillStyle=belly; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.ellipse(cx,py+ph*0.75,pw*0.26,ph*0.16,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    // Long neck
+    ctx.fillStyle=body; ctx.strokeStyle=INK; ctx.lineWidth=3;
+    ctx.beginPath();
+    ctx.moveTo(cx-pw*0.12,py+ph*0.28);
+    ctx.lineTo(cx-pw*0.18,py+ph*0.08);
+    ctx.lineTo(cx+pw*0.06,py+ph*0.04);
+    ctx.lineTo(cx+pw*0.10,py+ph*0.26);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    // Head — longish
+    const hcx=cx-pw*0.08, hcy=py+ph*0.02;
+    ctx.fillStyle=body; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.ellipse(hcx,hcy,pw*0.28,ph*0.13,0.15,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    // Big bulbous moose nose/muzzle
+    ctx.fillStyle=belly; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.ellipse(hcx+pw*0.22,hcy+ph*0.04,pw*0.16,ph*0.09,0.2,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle="#8b6040";
+    ctx.beginPath(); ctx.arc(hcx+pw*0.28,hcy+ph*0.02,3,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(hcx+pw*0.28,hcy+ph*0.07,3,0,Math.PI*2); ctx.fill();
+    // Ears
+    for (const ex of [-1,1]) {
+      ctx.fillStyle=body; ctx.strokeStyle=INK; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.ellipse(hcx+ex*pw*0.24,hcy-ph*0.10,pw*0.09,ph*0.10,ex*0.3,0,Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle=belly; ctx.beginPath(); ctx.ellipse(hcx+ex*pw*0.24,hcy-ph*0.10,pw*0.05,ph*0.06,ex*0.3,0,Math.PI*2); ctx.fill();
+    }
+    drawEye(hcx+pw*0.08,hcy-ph*0.03,5);
+    // Antlers — the star feature!
+    const aw=Math.sin(tt*3)*0.04; // tiny sway
+    ctx.strokeStyle=body; ctx.lineWidth=7;
+    for (const ex of [-1,1]) {
+      const ax=hcx+ex*pw*0.16, ay=hcy-ph*0.12;
+      // Main beam going up
+      ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(ax+ex*pw*0.14,ay-ph*0.32+aw*ph); ctx.stroke();
+      // Brow tine
+      ctx.beginPath(); ctx.moveTo(ax+ex*pw*0.06,ay-ph*0.14); ctx.lineTo(ax+ex*pw*0.20,ay-ph*0.18); ctx.stroke();
+      // Palm — flat wide section
+      const palmX=ax+ex*pw*0.14, palmY=ay-ph*0.32;
+      ctx.beginPath(); ctx.moveTo(palmX,palmY); ctx.lineTo(palmX+ex*pw*0.18,palmY+ph*0.04); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(palmX,palmY); ctx.lineTo(palmX+ex*pw*0.16,palmY-ph*0.12); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(palmX+ex*pw*0.10,palmY-ph*0.06); ctx.lineTo(palmX+ex*pw*0.22,palmY-ph*0.10); ctx.stroke();
+    }
+    ctx.strokeStyle=INK; ctx.lineWidth=3;
+    for (const ex of [-1,1]) {
+      const ax=hcx+ex*pw*0.16, ay=hcy-ph*0.12;
+      ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(ax+ex*pw*0.14,ay-ph*0.32+aw*ph); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(ax+ex*pw*0.06,ay-ph*0.14); ctx.lineTo(ax+ex*pw*0.20,ay-ph*0.18); ctx.stroke();
+      const palmX=ax+ex*pw*0.14, palmY=ay-ph*0.32;
+      ctx.beginPath(); ctx.moveTo(palmX,palmY); ctx.lineTo(palmX+ex*pw*0.18,palmY+ph*0.04); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(palmX,palmY); ctx.lineTo(palmX+ex*pw*0.16,palmY-ph*0.12); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(palmX+ex*pw*0.10,palmY-ph*0.06); ctx.lineTo(palmX+ex*pw*0.22,palmY-ph*0.10); ctx.stroke();
+    }
+    // Dewlap (bell) under chin
+    ctx.fillStyle=belly; ctx.strokeStyle=INK; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.ellipse(hcx+pw*0.10,hcy+ph*0.12,pw*0.06,ph*0.08,0.3,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    // Stubby tail
+    ctx.fillStyle="white"; ctx.strokeStyle=INK; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.ellipse(px+pw*0.92,py+ph*0.38,pw*0.06,ph*0.06,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+  }
+
+  // ── Bear ──────────────────────────────────────────────────────────────────────
+  function drawBear(px,py,pw,ph,body,belly,tt,ducking,now) {
+    const cx=px+pw/2;
+    ctx.strokeStyle=INK; ctx.lineWidth=3;
+    // Big stocky body
+    ctx.fillStyle=body;
+    ctx.beginPath(); ctx.ellipse(cx,py+ph*0.65,pw*0.50,ph*0.36,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle=belly; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.ellipse(cx,py+ph*0.70,pw*0.30,ph*0.22,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    // Round head
+    const hcx=cx-pw*0.04, hcy=py+ph*0.18;
+    ctx.fillStyle=body; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.arc(hcx,hcy,pw*0.38,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    // Snout
+    ctx.fillStyle=belly; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.ellipse(hcx+pw*0.12,hcy+ph*0.10,pw*0.20,ph*0.13,0.1,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle="#331111";
+    ctx.beginPath(); ctx.ellipse(hcx+pw*0.16,hcy+ph*0.07,pw*0.08,ph*0.05,0,0,Math.PI*2); ctx.fill();
+    // Round ears
+    for (const ex of [-1,1]) {
+      ctx.fillStyle=body; ctx.strokeStyle=INK; ctx.lineWidth=2.5;
+      ctx.beginPath(); ctx.arc(hcx+ex*pw*0.32,hcy-ph*0.22,pw*0.13,0,Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle=belly; ctx.beginPath(); ctx.arc(hcx+ex*pw*0.32,hcy-ph*0.22,pw*0.07,0,Math.PI*2); ctx.fill();
+    }
+    drawEye(hcx-pw*0.14,hcy-ph*0.04,6);
+    drawEye(hcx+pw*0.10,hcy-ph*0.04,6);
+    // Lumbering arm forward while running
+    const armSwing=Math.sin(tt*7)*0.25;
+    ctx.strokeStyle=body; ctx.lineWidth=12;
+    ctx.beginPath(); ctx.moveTo(px+pw*0.15,py+ph*0.55); ctx.lineTo(px-pw*0.12,py+ph*0.72+armSwing*ph*0.15); ctx.stroke();
+    ctx.strokeStyle=INK; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.moveTo(px+pw*0.15,py+ph*0.55); ctx.lineTo(px-pw*0.12,py+ph*0.72+armSwing*ph*0.15); ctx.stroke();
+    // Paw
+    ctx.fillStyle=body; ctx.strokeStyle=INK; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(px-pw*0.12,py+ph*0.72+armSwing*ph*0.15,pw*0.10,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    // Claws
+    ctx.strokeStyle=INK; ctx.lineWidth=1.5;
+    for (let c=-1;c<=1;c++) {
+      ctx.beginPath(); ctx.moveTo(px-pw*0.12+c*pw*0.06,py+ph*0.72+armSwing*ph*0.15+pw*0.08);
+      ctx.lineTo(px-pw*0.12+c*pw*0.08,py+ph*0.72+armSwing*ph*0.15+pw*0.14); ctx.stroke();
+    }
+    // Stubby tail
+    ctx.fillStyle=body; ctx.strokeStyle=INK; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(px+pw*0.90,py+ph*0.46,pw*0.07,0,Math.PI*2); ctx.fill(); ctx.stroke();
+  }
+
+  const CHAR_DRAW = { frog:drawFrog, dog:drawDog, cat:drawCat, monkey:drawMonkey, capybara:drawCapybara, hippo:drawHippo, elephant:drawElephant, puffin:drawPuffin, axolotl:drawAxolotl, pig:drawPig, moose:drawMoose, bear:drawBear };
 
   // ── Player draw ───────────────────────────────────────────────────────────────
   function drawPlayer(now) {
@@ -1483,19 +1717,86 @@
     for (const o of obstacles) {
       ctx.strokeStyle=INK; ctx.lineWidth=3;
       if (o.kind==="snake") {
-        const cx=o.x+o.w/2, cy=o.y+o.h/2, r=o.w*0.42;
-        ctx.fillStyle="#4ec44e";
-        ctx.beginPath(); ctx.ellipse(cx,cy+o.h*0.10,r,o.h*0.28,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
-        ctx.beginPath(); ctx.ellipse(cx,cy-o.h*0.16,r*0.78,o.h*0.22,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
-        ctx.fillStyle="#a8f5a8"; ctx.beginPath(); ctx.ellipse(cx,cy+o.h*0.10,r*0.55,o.h*0.16,0,0,Math.PI*2); ctx.fill();
-        const hx=cx+r*0.45, hy=o.y+o.h*0.08;
-        ctx.fillStyle="#4ec44e"; ctx.strokeStyle=INK; ctx.lineWidth=3;
-        ctx.beginPath(); ctx.ellipse(hx,hy,o.w*0.20,o.h*0.22,-0.3,0,Math.PI*2); ctx.fill(); ctx.stroke();
-        ctx.strokeStyle="#ff4455"; ctx.lineWidth=2;
-        ctx.beginPath(); ctx.moveTo(hx+o.w*0.17,hy-2); ctx.lineTo(hx+o.w*0.26,hy-6); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(hx+o.w*0.17,hy-2); ctx.lineTo(hx+o.w*0.26,hy+2); ctx.stroke();
-        ctx.fillStyle="white"; ctx.beginPath(); ctx.arc(hx+o.w*0.08,hy-o.h*0.08,5,0,Math.PI*2); ctx.fill();
-        ctx.fillStyle=INK;     ctx.beginPath(); ctx.arc(hx+o.w*0.09,hy-o.h*0.08,2.5,0,Math.PI*2); ctx.fill();
+        // Draw a proper coiled snake with sinuous body, raised head, scales, tongue
+        const t = now / 1000;
+        const bx = o.x, by = o.y + o.h, bw = o.w, bh = o.h;
+        const cx = bx + bw * 0.5;
+        const scaleBody = "#3cb83c", scaleLight = "#55dd55", scaleBelly = "#c8f0a8", scalePattern = "#2a9a2a";
+
+        // --- Coiled body: two overlapping sine-wave ovals sitting on the ground ---
+        ctx.save();
+        // Bottom coil (bigger)
+        ctx.fillStyle = scaleBody; ctx.strokeStyle = INK; ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.ellipse(cx - bw*0.06, by - bh*0.28, bw*0.42, bh*0.28, 0, 0, Math.PI*2);
+        ctx.fill(); ctx.stroke();
+        // Belly highlight on bottom coil
+        ctx.fillStyle = scaleBelly;
+        ctx.beginPath();
+        ctx.ellipse(cx - bw*0.06, by - bh*0.22, bw*0.24, bh*0.14, 0, 0, Math.PI*2);
+        ctx.fill();
+        // Scale pattern diamonds on body
+        ctx.fillStyle = scalePattern;
+        for (let si = 0; si < 3; si++) {
+          const sx = cx - bw*0.28 + si*bw*0.22, sy = by - bh*0.30;
+          ctx.beginPath();
+          ctx.moveTo(sx, sy - bh*0.08); ctx.lineTo(sx + bw*0.08, sy);
+          ctx.lineTo(sx, sy + bh*0.08); ctx.lineTo(sx - bw*0.08, sy);
+          ctx.closePath(); ctx.fill();
+        }
+        // Top coil (smaller, sits on top of bottom)
+        ctx.fillStyle = scaleBody; ctx.strokeStyle = INK; ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.ellipse(cx + bw*0.08, by - bh*0.60, bw*0.28, bh*0.20, 0.2, 0, Math.PI*2);
+        ctx.fill(); ctx.stroke();
+        ctx.fillStyle = scaleBelly;
+        ctx.beginPath();
+        ctx.ellipse(cx + bw*0.08, by - bh*0.56, bw*0.14, bh*0.10, 0.2, 0, Math.PI*2);
+        ctx.fill();
+
+        // --- Raised head, angled up and to the right ---
+        const headAngle = -0.55; // radians — head tilted up
+        const headBaseX = cx + bw*0.28, headBaseY = by - bh*0.72;
+        ctx.save();
+        ctx.translate(headBaseX, headBaseY);
+        ctx.rotate(headAngle);
+        // Head shape: slightly flattened triangle-ish ellipse (viper style)
+        ctx.fillStyle = scaleBody; ctx.strokeStyle = INK; ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.ellipse(bw*0.10, 0, bw*0.20, bh*0.14, 0, 0, Math.PI*2);
+        ctx.fill(); ctx.stroke();
+        // Snout tip slightly pointed
+        ctx.fillStyle = scaleBody;
+        ctx.beginPath();
+        ctx.moveTo(bw*0.26, -bh*0.06); ctx.lineTo(bw*0.34, 0); ctx.lineTo(bw*0.26, bh*0.06);
+        ctx.closePath(); ctx.fill(); ctx.stroke();
+        // Top-of-head scale ridge
+        ctx.fillStyle = scalePattern;
+        ctx.beginPath();
+        ctx.ellipse(bw*0.10, -bh*0.06, bw*0.10, bh*0.04, 0, 0, Math.PI*2);
+        ctx.fill();
+        // Eye — slit pupil for menace
+        const ex = bw*0.18, ey = -bh*0.04;
+        ctx.fillStyle = "#ffee00"; ctx.beginPath(); ctx.arc(ex, ey, bh*0.055, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = "#111"; ctx.beginPath();
+        ctx.ellipse(ex, ey, bh*0.018, bh*0.048, 0, 0, Math.PI*2); ctx.fill();
+        // Eye outline
+        ctx.strokeStyle = INK; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(ex, ey, bh*0.055, 0, Math.PI*2); ctx.stroke();
+        // Nostril dots
+        ctx.fillStyle = "#1a5a1a";
+        ctx.beginPath(); ctx.arc(bw*0.28, -bh*0.03, 2, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(bw*0.28,  bh*0.03, 2, 0, Math.PI*2); ctx.fill();
+        // Forked tongue — flickers via sine wave
+        const tongueFlick = Math.sin(t * 9 + o.phase) > 0;
+        if (tongueFlick) {
+          ctx.strokeStyle = "#ff1144"; ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.moveTo(bw*0.32, 0); ctx.lineTo(bw*0.46, 0); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(bw*0.46, 0); ctx.lineTo(bw*0.54, -bh*0.06); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(bw*0.46, 0); ctx.lineTo(bw*0.54,  bh*0.06); ctx.stroke();
+        }
+        ctx.restore();
+        ctx.restore();
       } else {
         const wb=Math.sin((now/1000)*7+o.phase)*18;
         const cx=o.x+o.w/2, cy=o.y+o.h/2, ws=o.w*0.75;
