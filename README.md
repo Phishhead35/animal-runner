@@ -1,6 +1,6 @@
 # 🐸 Animal Runner
 
-![Animal Runner Cover](animal_runner_cover2.png)
+![Animal Runner Cover](Animal%20Runner%20Cover2.png))
 
 A fast-paced browser endless runner with 12 playable characters, 
 48 unlockable skins, and 4 hand-crafted worlds.
