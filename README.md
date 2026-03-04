@@ -5,7 +5,7 @@
 A fast-paced browser endless runner with 12 playable characters, 
 48 unlockable skins, and 6 hand-crafted worlds.
 
-🌿 Grasslands → ☀️ Desert → 🌙 Night Desert → ⚡ Storm - ❄️ Arctic - 🌊 Underwater
+🌿 Grasslands → ☀️ Desert → 🌙 Night Desert → ⚡ Storm → ❄️ Arctic → 🌊 Underwater
 - 🏆 Local leaderboard — top 10 scores saved on your device (press L)
 ```
 
