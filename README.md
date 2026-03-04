@@ -19,4 +19,4 @@ A fast-paced browser endless runner with 12 playable characters,
 Tap / Space / ↑ to jump · Hold to charge · Double-tap to quick hop · Hold ↓ to duck
 
 ## 🎮 Download & Play
-[![Support on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/s/325105923a
+[![Support on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/s/325105923a)
