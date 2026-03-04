@@ -3,6 +3,9 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="mobile-web-app-capable" content="yes" />
   <title>Cartoon Animal Runner</title>
   <style>
     *, *::before, *::after { box-sizing:border-box; }
@@ -297,11 +300,38 @@
   function activeSkin(ck) { return CHARACTERS[ck].skins[activeSkinKey(ck)]; }
 
   // ── Audio & Music Engine ──────────────────────────────────────────────────────
+  // iPhone-hardened audio system:
+  // 1. A silent <audio> element is played first on every gesture — this moves
+  //    WebAudio out of the "ringer" channel and past the silent mode switch.
+  // 2. AudioContext is created AND resumed inside the same gesture call stack.
+  // 3. We verify ctx.state === "running" before playing anything.
+  // 4. unlockAudio() is idempotent and safe to call on every interaction.
+
   let audioCtx = null, muted = true;
-  let musicGain = null;   // master gain node for all music
-  let musicNodes = [];    // active oscillator/gain nodes to stop on track change
-  let musicTrack = null;  // "start" | "play" | null
-  let musicVolume = 0.35; // 0‥1, user-adjustable
+  let musicGain = null;
+  let musicNodes = [];
+  let musicTrack = null;
+  let musicVolume = 0.35;
+  let audioUnlocked = false;
+
+  // Create a tiny silent <audio> element — playing it tricks iOS into
+  // routing subsequent WebAudio through the media (not ringer) channel.
+  const _silentAudio = (() => {
+    try {
+      const a = document.createElement("audio");
+      // Shortest valid MP3 — 64 bytes of silence
+      a.src = "data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjI5LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAADhgCenp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6e////////////////////////////////////////////////////////////////AAAAAExhdmM1OC41AAAAAAAAAAAAAAAA//tQZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAACAAACcQCWlpaWlpaWlpaWlpaWlpaWlpaWlpaWlpaWlpaWlpaWlpaWlpaW////////////////////////////////////////////////////////////////AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+      a.loop = false;
+      a.volume = 0.001; // near-silent but not zero
+      a.preload = "auto";
+      return a;
+    } catch(e) { return null; }
+  })();
+
+  function _playSilentAudio() {
+    if (!_silentAudio) return;
+    _silentAudio.play().catch(() => {}); // ignore errors — best-effort
+  }
 
   function ensureAudio() {
     if (audioCtx) return;
@@ -311,15 +341,21 @@
     musicGain.connect(audioCtx.destination);
   }
 
-  // Mobile-safe audio unlock — call on EVERY user gesture
+  // Must be called directly inside a user gesture event handler.
+  // Safe to call many times — does nothing once unlocked.
   function unlockAudio() {
+    if (audioUnlocked && audioCtx && audioCtx.state === "running") return;
+    _playSilentAudio();
     if (!audioCtx) return;
-    if (audioCtx.state === "suspended") audioCtx.resume();
+    if (audioCtx.state === "suspended") {
+      audioCtx.resume().then(() => { audioUnlocked = true; });
+    } else if (audioCtx.state === "running") {
+      audioUnlocked = true;
+    }
   }
 
   function beep(freq=440, dur=0.06, gain=0.05) {
-    if (muted || !audioCtx) return;
-    unlockAudio();
+    if (muted || !audioCtx || audioCtx.state !== "running") return;
     const o = audioCtx.createOscillator(), g = audioCtx.createGain();
     o.type="square"; o.frequency.value=freq; g.gain.value=gain;
     o.connect(g); g.connect(audioCtx.destination);
@@ -443,16 +479,23 @@
     muted = v;
     if (!muted) {
       ensureAudio();
-      // Resume is critical on iOS — must be called directly inside a user gesture
-      audioCtx.resume().then(() => {
+      _playSilentAudio(); // iOS silent-switch bypass
+      // resume() MUST be called in the same call stack as the gesture
+      const doPlay = () => {
+        if (audioCtx.state !== "running") return; // give up — not unlocked yet
+        audioUnlocked = true;
         applyMusicVolume();
         const track = (state === "play") ? "play" : "start";
-        // Force restart so iOS actually plays
-        musicTrack = null;
+        musicTrack = null; // force restart
         playMusic(track);
         beep(330, 0.05, 0.05);
-        setTimeout(() => beep(440, 0.05, 0.05), 60);
-      });
+        setTimeout(() => beep(440, 0.05, 0.05), 80);
+      };
+      if (audioCtx.state === "running") {
+        doPlay();
+      } else {
+        audioCtx.resume().then(doPlay);
+      }
     } else {
       applyMusicVolume();
       stopMusic();
@@ -697,6 +740,19 @@
   }
 
   // ── Input ─────────────────────────────────────────────────────────────────────
+  // iPhone: capture the very first touch at document level to unlock audio
+  // before any game button handlers fire. Use "once" so it only runs once.
+  document.addEventListener("touchstart", function _iosFirstTouch() {
+    ensureAudio();
+    unlockAudio();
+    document.removeEventListener("touchstart", _iosFirstTouch);
+  }, { passive: true, capture: true });
+  document.addEventListener("pointerdown", function _iosFirstPointer() {
+    ensureAudio();
+    unlockAudio();
+    document.removeEventListener("pointerdown", _iosFirstPointer, true);
+  }, { passive: true, capture: true });
+
   window.addEventListener("keydown", e => {
     ensureAudio(); unlockAudio();
     const code=e.code;
@@ -775,10 +831,32 @@
   btnAssist.addEventListener("click", ()=>setAssist(!assist));
   btnAudio.addEventListener("click",  ()=>setMuted(!muted));
   const volSlider = document.getElementById("volSlider");
+  // Slider "change" fires on lift — which IS a gesture on iOS
+  // "input" fires while dragging — not always a gesture
+  // We handle both but only unlock on "change" (finger-lift)
   volSlider.addEventListener("input", e => {
     const v = parseFloat(e.target.value);
-    if (v === 0) { if (!muted) setMuted(true); }
-    else { if (muted) setMuted(false); else setMusicVolume(v); }
+    if (v === 0) { if (!muted) setMuted(true); return; }
+    // If already unlocked, just adjust volume live
+    if (!muted && audioCtx && audioCtx.state === "running") {
+      setMusicVolume(v);
+    }
+    // If muted but unlocked, unmute silently
+    else if (muted && audioCtx && audioCtx.state === "running") {
+      muted = false;
+      setMusicVolume(v);
+      musicTrack = null;
+      playMusic((state === "play") ? "play" : "start");
+      hudAudio.textContent = "Audio: On";
+    }
+    // If not yet unlocked — do nothing; user must tap AUDIO button first
+  });
+  volSlider.addEventListener("change", e => {
+    // "change" fires on finger-lift = valid gesture on iOS
+    const v = parseFloat(e.target.value);
+    if (v > 0 && muted) setMuted(false); // this will call resume() in a gesture
+    if (v > 0) setMusicVolume(v);
+    if (v === 0 && !muted) setMuted(true);
   });
   document.getElementById("btnShield").addEventListener("click", ()=>buyPower("shield"));
   document.getElementById("btnMagnet").addEventListener("click", ()=>buyPower("magnet"));
