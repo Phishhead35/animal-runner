@@ -85,6 +85,7 @@
       <button class="btn-wide btn-dark" id="btnJump">JUMP</button>
       <button class="btn-wide btn-dark" id="btnDuck">DUCK ↓</button>
       <button class="btn-green" id="btnShop">SHOP (S)</button>
+      <button class="btn-green" id="btnLeaderboard">🏆 SCORES (L)</button>
       <button class="btn-green" id="btnAssist">ASSIST: ON (A)</button>
       <button class="btn-dark"  id="btnAudio">AUDIO (M)</button>
       <input type="range" id="volSlider" min="0" max="1" step="0.05" value="0"
@@ -120,7 +121,7 @@
   const INK            = "#232323";
 
   // Biome timing
-  const BIOME_TIMES  = [0, 25, 70, 140];   // phase start times
+  const BIOME_TIMES  = [0, 25, 70, 140, 230, 340];   // phase start times
   const BIOME_FADE   = 5;                   // crossfade duration (seconds)
 
   // Per-biome visual descriptors
@@ -150,6 +151,18 @@
       cloudCol:"rgba(60,60,80,0.90)",
       fog: null,
     },
+    { // 4 — Arctic
+      sky1:[200,230,255], sky2:[170,210,245],
+      ground:"#ddeeff",   groundDark:"#a8ccee",
+      cloudCol:"rgba(240,248,255,0.85)",
+      fog: null,
+    },
+    { // 5 — Underwater
+      sky1:[ 10, 60,120], sky2:[  5, 40, 90],
+      ground:"#1a4a6a",   groundDark:"#0d2a40",
+      cloudCol:"rgba(40,100,180,0.50)",
+      fog: null,
+    },
   ];
 
   const EASY_END       = 30.0;
@@ -173,12 +186,16 @@
     [0.25, 0.30, 0.45, 0.00],  // Desert
     [0.15, 0.25, 0.30, 0.30],  // Night Desert
     [0.20, 0.20, 0.20, 0.40],  // Storm
+    [0.10, 0.50, 0.00, 0.40],  // Arctic  (rocks+logs heavy)
+    [0.30, 0.40, 0.00, 0.30],  // Underwater (snake=jellyfish, rock=coral, log=chest)
   ];
   const AIR_WEIGHTS = [
     [1.00, 0.00, 0.00],  // Grasslands  [bird, eagle, bat]
     [0.55, 0.45, 0.00],  // Desert
     [0.10, 0.45, 0.45],  // Night Desert
     [0.05, 0.45, 0.50],  // Storm
+    [0.50, 0.50, 0.00],  // Arctic     (bird=snow owl, eagle=snow eagle)
+    [0.00, 0.00, 1.00],  // Underwater (bat slot = pufferfish)
   ];
 
   const ASSIST_ON      = true;
@@ -272,6 +289,7 @@
       const s = JSON.parse(localStorage.getItem(SAVE_KEY));
       s.wallet       ??= 0;
       s.best         ??= 0;
+      s.leaderboard  ??= [];
       s.character    ??= "frog";
       s.charSkin     ??= {};
       s.ownedChars   ??= ["frog"];
@@ -284,7 +302,7 @@
       }
       return s;
     } catch {
-      return { wallet:0, best:0, character:"frog", charSkin:{},
+      return { wallet:0, best:0, leaderboard:[], character:"frog", charSkin:{},
                ownedChars:["frog"],
                ownedSkins:{ frog:["green"], dog:["tan"], cat:["orange"], monkey:["brown"] },
                assist:ASSIST_ON };
@@ -764,6 +782,7 @@
     if (code==="KeyR"&&state!=="play") { state="play"; resetRun(); }
     if (code==="KeyM") setMuted(!muted);
     if (code==="KeyS"&&state!=="play") { state=(state==="shop")?"start":"shop"; if (state==="start"||state==="shop") playMusic("start"); }
+    if (code==="KeyL") { state=(state==="leaderboard")?"start":"leaderboard"; playMusic("start"); }
     if (code==="KeyS"&&state==="play") { player.ducking=true; duckHeld=true; e.preventDefault(); }
     if (code==="ArrowDown"&&state==="play") { player.ducking=true; duckHeld=true; e.preventDefault(); }
     if (code==="KeyA") setAssist(!assist);
@@ -828,6 +847,7 @@
   btnDuck.addEventListener("mouseleave",   ()=>{ player.ducking=false; duckHeld=false; });
 
   document.getElementById("btnShop").addEventListener("click", ()=>{ state=(state==="shop"?"start":"shop"); playMusic("start"); });
+  document.getElementById("btnLeaderboard").addEventListener("click", ()=>{ state=(state==="leaderboard"?"start":"leaderboard"); playMusic("start"); });
   btnAssist.addEventListener("click", ()=>setAssist(!assist));
   btnAudio.addEventListener("click",  ()=>setMuted(!muted));
   const volSlider = document.getElementById("volSlider");
@@ -942,6 +962,148 @@
     }
   });
 
+
+  // ── Arctic snow particles ──────────────────────────────────────────────────────
+  const snowflakes = Array.from({length:90}, () => ({
+    x: Math.random()*960, y: Math.random()*540,
+    r: 1+Math.random()*3, vy: 40+Math.random()*60, vx: -20+Math.random()*40,
+    twink: Math.random()*Math.PI*2
+  }));
+  function drawArcticSnow(now) {
+    const vis = biomeIdx===4 ? biomeFade : prevBiome===4 ? 1-biomeFade : 0;
+    if (vis<0.01) return;
+    ctx.save(); ctx.globalAlpha=vis*0.82;
+    ctx.fillStyle="white";
+    for (const sf of snowflakes) {
+      const sz=sf.r*(0.8+0.2*Math.sin(now/600+sf.twink));
+      ctx.beginPath(); ctx.arc(sf.x,sf.y,sz,0,Math.PI*2); ctx.fill();
+    }
+    // Aurora strips at top
+    ctx.globalAlpha=vis*0.22;
+    const aColors=["#80ffcc","#60ddff","#aa88ff"];
+    for (let ai=0;ai<3;ai++) {
+      const wave=Math.sin(now/1800+ai*1.4)*18;
+      const grd=ctx.createLinearGradient(0,40+ai*28+wave,0,90+ai*28+wave);
+      grd.addColorStop(0,"transparent"); grd.addColorStop(0.5,aColors[ai]); grd.addColorStop(1,"transparent");
+      ctx.fillStyle=grd; ctx.fillRect(0,40+ai*28+wave,W,50);
+    }
+    ctx.restore();
+    // Advance snowflakes
+    const dt=0.016;
+    for (const sf of snowflakes) {
+      sf.x+=sf.vx*dt; sf.y+=sf.vy*dt;
+      if (sf.y>H+10) { sf.y=-10; sf.x=Math.random()*W; }
+      if (sf.x<-10)  sf.x=W+10;
+      if (sf.x>W+10) sf.x=-10;
+    }
+  }
+
+  // ── Underwater bubbles + caustic light ────────────────────────────────────────
+  const bubbles = Array.from({length:55}, () => ({
+    x: Math.random()*960, y: H+Math.random()*200,
+    r: 3+Math.random()*8, vy: -(30+Math.random()*50), vx: -8+Math.random()*16,
+    alpha: 0.3+Math.random()*0.5
+  }));
+  function drawUnderwaterBubbles(now) {
+    const vis = biomeIdx===5 ? biomeFade : prevBiome===5 ? 1-biomeFade : 0;
+    if (vis<0.01) return;
+    // Caustic shimmer overlay
+    ctx.save(); ctx.globalAlpha=vis*0.10;
+    ctx.strokeStyle="#60d8ff"; ctx.lineWidth=2;
+    for (let ci=0;ci<8;ci++) {
+      const cx2=(ci*130+(now/40)%130)%W;
+      const cy2=80+Math.sin(now/900+ci)*30;
+      ctx.beginPath(); ctx.ellipse(cx2,cy2,30+Math.sin(now/600+ci)*10,14,0.3,0,Math.PI*2); ctx.stroke();
+    }
+    // Bubbles
+    ctx.globalAlpha=vis;
+    for (const b of bubbles) {
+      ctx.beginPath(); ctx.arc(b.x,b.y,b.r,0,Math.PI*2);
+      ctx.strokeStyle=`rgba(150,220,255,${b.alpha})`; ctx.lineWidth=1.5; ctx.stroke();
+      ctx.fillStyle=`rgba(200,240,255,${b.alpha*0.25})`; ctx.fill();
+    }
+    ctx.restore();
+    const dt=0.016;
+    for (const b of bubbles) {
+      b.x+=b.vx*dt; b.y+=b.vy*dt;
+      if (b.y<-20) { b.y=H+20; b.x=Math.random()*W; }
+    }
+  }
+
+  // ── Leaderboard screen ────────────────────────────────────────────────────────
+  function drawLeaderboard() {
+    drawSky(); clouds.forEach(drawCloud);
+    // Panel
+    ctx.fillStyle="rgba(255,255,255,0.93)"; drawRoundRect(36,44,W-72,H-88,20); ctx.fill();
+    ctx.strokeStyle=INK; ctx.lineWidth=3; drawRoundRect(36,44,W-72,H-88,20); ctx.stroke();
+
+    // Title
+    ctx.fillStyle=INK; ctx.font="bold 44px system-ui";
+    const title="🏆 TOP SCORES";
+    ctx.fillText(title,(W-ctx.measureText(title).width)/2,104);
+
+    ctx.font="16px system-ui"; ctx.fillStyle="rgba(35,35,35,0.45)";
+    const hint="L or button to close  •  Top 10 scores saved on this device";
+    ctx.fillText(hint,(W-ctx.measureText(hint).width)/2,132);
+
+    const lb=save.leaderboard;
+    if (!lb||lb.length===0) {
+      ctx.fillStyle="rgba(35,35,35,0.4)"; ctx.font="24px system-ui";
+      const msg="No scores yet — play a run to get on the board!";
+      ctx.fillText(msg,(W-ctx.measureText(msg).width)/2,280);
+      return;
+    }
+
+    const biomeNames=["🌿 Grasslands","☀️ Desert","🌙 Night","⚡ Storm","❄️ Arctic","🌊 Underwater"];
+    const medals=["🥇","🥈","🥉"];
+    const rowH=38, startY=158;
+
+    // Header row
+    ctx.fillStyle="rgba(35,35,35,0.10)";
+    drawRoundRect(64,startY-4,W-128,rowH-2,8); ctx.fill();
+    ctx.fillStyle=INK; ctx.font="bold 15px system-ui";
+    ctx.fillText("RANK",80,startY+22);
+    ctx.fillText("SCORE",190,startY+22);
+    ctx.fillText("CHARACTER",330,startY+22);
+    ctx.fillText("REACHED",560,startY+22);
+    ctx.fillText("DATE",750,startY+22);
+
+    lb.forEach((entry,i) => {
+      const y=startY+rowH*(i+1);
+      // Row bg — highlight top 3
+      ctx.fillStyle= i===0?"rgba(255,215,0,0.18)":i===1?"rgba(192,192,192,0.15)":i===2?"rgba(205,127,50,0.13)":"rgba(0,0,0,0.03)";
+      drawRoundRect(64,y-4,W-128,rowH-2,8); ctx.fill();
+      if (i<3) { ctx.strokeStyle=i===0?"#d4a820":i===1?"#909090":"#8a5a20"; ctx.lineWidth=1.5; drawRoundRect(64,y-4,W-128,rowH-2,8); ctx.stroke(); }
+
+      ctx.fillStyle=INK; ctx.font=i<3?"bold 20px system-ui":"18px system-ui";
+      const medal=i<3?medals[i]:`#${i+1}`;
+      ctx.fillText(medal,80,y+22);
+
+      ctx.font=i<3?"bold 22px system-ui":"20px system-ui";
+      ctx.fillStyle=i===0?"#b8860b":i===1?"#606060":i===2?"#7a4010":INK;
+      ctx.fillText(entry.score.toLocaleString(),190,y+22);
+
+      ctx.fillStyle=INK; ctx.font="17px system-ui";
+      const charLabel=CHARACTERS[entry.char]?.label??entry.char;
+      ctx.fillText(charLabel,330,y+22);
+
+      const biomeName=biomeNames[entry.biome]??`Biome ${entry.biome}`;
+      ctx.fillText(biomeName,560,y+22);
+
+      ctx.font="14px system-ui"; ctx.fillStyle="rgba(35,35,35,0.55)";
+      ctx.fillText(entry.date??"-",750,y+22);
+    });
+
+    // Current best callout at bottom
+    ctx.fillStyle="rgba(35,35,35,0.08)";
+    drawRoundRect(64,H-120,W-128,52,12); ctx.fill();
+    ctx.strokeStyle="rgba(35,35,35,0.20)"; ctx.lineWidth=1.5;
+    drawRoundRect(64,H-120,W-128,52,12); ctx.stroke();
+    ctx.fillStyle=INK; ctx.font="bold 18px system-ui";
+    ctx.fillText(`All-time best: ${save.best.toLocaleString()}  •  Runs recorded: ${lb.length}/10`,
+      (W-ctx.measureText(`All-time best: ${save.best.toLocaleString()}  •  Runs recorded: ${lb.length}/10`).width)/2, H-88);
+  }
+
   // ── Drawing helpers ───────────────────────────────────────────────────────────
   function drawRoundRect(x,y,w,h,r) {
     r=Math.min(r,w/2,h/2);
@@ -965,7 +1127,7 @@
 
   function drawStars(now) {
     const vis = biomeIdx>=2 ? biomeFade : (biomeIdx===1?0:0);
-    if (vis<=0) return;
+    if (vis<=0 && biomeIdx!==4 && prevBiome!==4) return;
     ctx.save(); ctx.globalAlpha=vis;
     for (const s of stars) {
       const tw=0.5+0.5*Math.sin(now/700+s.twink);
@@ -1082,7 +1244,9 @@
   }
 
   function drawCloud(cl) {
-    const col = biomeIdx===3||prevBiome===3 ? "rgba(50,50,65,0.88)" :
+    const col = biomeIdx===5||prevBiome===5 ? "rgba(20,80,160,0.45)" :
+                biomeIdx===4||prevBiome===4 ? "rgba(220,240,255,0.80)" :
+                biomeIdx===3||prevBiome===3 ? "rgba(50,50,65,0.88)" :
                 biomeIdx===2||prevBiome===2 ? "rgba(30,20,60,0.65)" :
                 biomeIdx===1||prevBiome===1 ? "rgba(255,230,160,0.60)" : "rgba(255,255,255,0.90)";
     ctx.save(); ctx.globalAlpha=0.9; ctx.fillStyle=col;
@@ -1987,6 +2151,7 @@
   // ── Main draw ─────────────────────────────────────────────────────────────────
   function draw(now) {
     if (state==="shop") { drawShop(); return; }
+    if (state==="leaderboard") { drawLeaderboard(); return; }
 
     drawSky();
     drawStars(now);
@@ -1997,6 +2162,8 @@
     drawLightning(now);
     drawRain(now);
     drawHeatShimmer(now);
+    drawArcticSnow(now);
+    drawUnderwaterBubbles(now);
 
     const gc  = getBiomeGround();
     const gdc = getBiomeGroundDark();
@@ -2004,9 +2171,22 @@
     ctx.fillStyle=gdc; ctx.fillRect(0,GROUND_Y,W,8);
     // Ground surface dots — tint based on biome
     const dotOff=(dist*0.6)%40;
-    const dotCol = biomeIdx===0?(prevBiome===0?"#5acb66":"#5acb66"):"rgba(0,0,0,0.10)";
-    ctx.fillStyle=dotCol;
-    for (let x=-40;x<W+40;x+=40) { ctx.beginPath(); ctx.arc(x-dotOff,GROUND_Y+40,4,0,Math.PI*2); ctx.fill(); }
+    if (biomeIdx===4||prevBiome===4) {
+      // Arctic: little ice crystal dots on snow
+      ctx.fillStyle="rgba(180,220,255,0.70)";
+      for (let x=-40;x<W+40;x+=40) { ctx.beginPath(); ctx.arc(x-dotOff,GROUND_Y+5,5,0,Math.PI*2); ctx.fill(); }
+    } else if (biomeIdx===5||prevBiome===5) {
+      // Underwater: wavy seaweed stubs
+      ctx.strokeStyle="rgba(40,180,120,0.55)"; ctx.lineWidth=3;
+      for (let x=0;x<W+60;x+=60) {
+        const sx=(x-dotOff+W*2)%W;
+        ctx.beginPath(); ctx.moveTo(sx,GROUND_Y); ctx.quadraticCurveTo(sx+12,GROUND_Y-22,sx+6,GROUND_Y-40); ctx.stroke();
+      }
+    } else {
+      const dotCol = biomeIdx===0?"#5acb66":"rgba(0,0,0,0.10)";
+      ctx.fillStyle=dotCol;
+      for (let x=-40;x<W+40;x+=40) { ctx.beginPath(); ctx.arc(x-dotOff,GROUND_Y+40,4,0,Math.PI*2); ctx.fill(); }
+    }
 
     // Coins
     for (const c of coinList) {
@@ -2304,12 +2484,14 @@
     if (state==="start") {
       drawCenteredPanel(`${CHARACTERS[save.character].label} Runner`,
         "Hold Space/↑ = charge jump  •  Hold ↓/S = duck",
-        "Jump over snakes  •  Duck under birds  •  S = Shop");
+        "Jump over snakes  •  Duck under birds  •  S = Shop  •  L = Leaderboard");
     }
     if (state==="over") {
+      const rank=save.leaderboard.findIndex(e=>e.score===score)+1;
+      const rankStr=rank>0?(rank<=3?["🥇 NEW RECORD!","🥈 2nd Place!","🥉 3rd Place!"][rank-1]:`Rank #${rank}`):"";
       drawCenteredPanel("GAME OVER",
-        `Score: ${score}  •  Best: ${save.best}  •  Coins: ${coinsRun}`,
-        "Space/R to restart  •  S = Shop");
+        `Score: ${score}  •  Best: ${save.best}  •  Coins: ${coinsRun}${rankStr?" — "+rankStr:""}`,
+        "Space/R to restart  •  S = Shop  •  L = Leaderboard");
     }
   }
 
@@ -2441,7 +2623,18 @@
         }
         dead = true; beep(120, 0.12, 0.08); break;
       }
-      if (dead) { save.best=Math.max(save.best,score); persist(); state="over"; stopMusic(); playMusic("start"); }
+      if (dead) {
+        save.best=Math.max(save.best,score);
+        // Leaderboard: push entry, keep top 10
+        const entry={score, char:save.character, skin:activeSkinKey(save.character),
+                     biome:biomeIdx, date:new Date().toLocaleDateString()};
+        save.leaderboard.push(entry);
+        save.leaderboard.sort((a,b)=>b.score-a.score);
+        if (save.leaderboard.length>10) save.leaderboard.length=10;
+        persist();
+        state="over";
+        stopMusic(); playMusic("start");
+      }
     }
 
     // HUD
